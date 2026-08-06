@@ -2420,5 +2420,15 @@ MODINIT_DEFINE(_freetype)
         return NULL;
     }
 
+#ifndef PYPY_VERSION
+    /* Register in the per-interpreter module index so PyState_FindModule-based
+       state lookup works in embedding runtimes that run module init per
+       interpreter. */
+    if (PyState_AddModule(module, &_freetypemodule) < 0) {
+        Py_DECREF(module);
+        return NULL;
+    }
+#endif /* PYPY_VERSION */
+
     return module;
 }

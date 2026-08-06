@@ -3921,5 +3921,15 @@ MODINIT_DEFINE(display)
     state->using_gl = 0;
     state->auto_resize = SDL_TRUE;
 
+#ifndef PYPY_VERSION
+    /* Register in the per-interpreter module index so PyState_FindModule-based
+       state lookup works in embedding runtimes that run module init per
+       interpreter. */
+    if (PyState_AddModule(module, &_module) < 0) {
+        Py_DECREF(module);
+        return NULL;
+    }
+#endif /* PYPY_VERSION */
+
     return module;
 }
