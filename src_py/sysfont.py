@@ -27,7 +27,6 @@ import warnings
 from os.path import basename, dirname, exists, join, splitext
 
 from pygame import __file__ as pygame_main_file
-from pygame.font import Font
 
 OpenType_extensions = frozenset((".ttf", ".ttc", ".otf"))
 Sysfonts = {}
@@ -380,6 +379,15 @@ def font_constructor(fontpath, size, bold, italic):
 
     :return: A font.Font object.
     """
+
+    # Imported here rather than at module scope: pygame.font imports
+    # pygame.sysfont, so a module-scope import is a cycle. It happens to
+    # resolve when pygame.font is the extension module, because an extension
+    # is fully initialised by the time its import returns -- but not when
+    # pygame.font is the freetype-backed Python implementation, where
+    # sysfont is imported before the Font class has been defined. Font is
+    # needed by this one function; match_font() and get_fonts() do not use it.
+    from pygame.font import Font
 
     font = Font(fontpath, size)
     if bold:
