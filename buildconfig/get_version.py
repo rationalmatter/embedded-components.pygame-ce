@@ -30,7 +30,14 @@ else:
     version = ast.literal_eval(finds[0].strip())
 
 
-_splits = version.split(".")
+# A PEP 440 local version label ("+something") identifies a particular build of
+# a release rather than a different release, so it belongs to the distribution
+# version but must not reach the C version macros: PG_PATCH_VERSION is used in
+# integer arithmetic by PG_VERSIONNUM in src_c/include/_pygame.h, and
+# src_py/version.py parses the same component with int().
+public_version = version.split("+", 1)[0]
+
+_splits = public_version.split(".")
 
 # handle optional dev tag
 if len(_splits) == 3:
