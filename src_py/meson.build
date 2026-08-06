@@ -25,7 +25,17 @@ py.install_sources(python_sources, subdir: pg)
 
 # if not building font, install use ftfont for font.py
 if not sdl_ttf_dep.found() and freetype_dep.found()
-    py.install_sources('ftfont.py', subdir: pg, rename: 'font.py')
+    # `install_data` rather than `py.install_sources`: the python module's
+    # install_sources has no `rename` keyword, and meson rejects unknown
+    # keyword arguments, so this branch could never configure. `pg_dir` is
+    # `py.get_install_dir() / pg`, i.e. exactly the directory `subdir: pg`
+    # resolves to -- the same idiom the data files below already use.
+    install_data(
+        'ftfont.py',
+        install_dir: pg_dir,
+        rename: 'font.py',
+        install_tag: 'pg-tag',
+    )
 endif
 
 data_files = files(
