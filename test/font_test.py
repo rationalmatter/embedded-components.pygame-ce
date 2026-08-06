@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 
 import pygame
 from pygame import font as pygame_font  # So font can be replaced with ftfont
+from pygame.tests.test_utils import interactive_test
 
 FONTDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "fonts")
 
@@ -1100,6 +1101,7 @@ class FontTypeTest(unittest.TestCase):
 
 
 @unittest.skipIf(IS_PYPY, "pypy skip known failure")  # TODO
+@interactive_test
 class VisualTestsInteractive(unittest.TestCase):
     __tags__ = ["interactive"]
 

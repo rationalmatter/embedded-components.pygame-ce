@@ -10,7 +10,17 @@ from pygame.tests.test_utils import trunk_relative_path
 if os.environ.get("SDL_VIDEODRIVER") == pygame.NULL_VIDEODRIVER:
     __tags__ = ("ignore", "subprocess_ignore")
 
+# The tags above are only understood by pygame's own test runner; under any
+# other runner every test in this module is collected and run against a driver
+# that has no clipboard. State the same condition in the form every runner
+# understands.
+needs_video_driver = unittest.skipIf(
+    os.environ.get("SDL_VIDEODRIVER") == pygame.NULL_VIDEODRIVER,
+    f"scrap needs a video driver, and SDL_VIDEODRIVER is {pygame.NULL_VIDEODRIVER}",
+)
 
+
+@needs_video_driver
 class ScrapModuleTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -141,6 +151,7 @@ class ScrapModuleTest(unittest.TestCase):
         self.assertEqual(scrap.get_text(), "")
 
 
+@needs_video_driver
 class ScrapModuleClipboardNotOwnedTest(unittest.TestCase):
     """Test the scrap module's functionality when the pygame application is
     not the current owner of the clipboard.

@@ -4,6 +4,7 @@ import unittest
 import warnings
 
 import pygame
+from pygame.tests.test_utils import interactive_test
 
 DARWIN = "Darwin" in platform.platform()
 
@@ -19,6 +20,7 @@ class MouseTests(unittest.TestCase):
         pygame.display.quit()
 
 
+@interactive_test
 class MouseModuleInteractiveTest(MouseTests):
     __tags__ = ["interactive"]
 

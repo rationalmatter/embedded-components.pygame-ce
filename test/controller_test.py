@@ -2,7 +2,7 @@ import unittest
 
 import pygame
 import pygame._sdl2.controller as controller
-from pygame.tests.test_utils import prompt, question
+from pygame.tests.test_utils import interactive_test, prompt, question
 
 
 class ControllerModuleTest(unittest.TestCase):
@@ -130,6 +130,7 @@ class ControllerTypeTest(unittest.TestCase):
             self.skipTest("No controller connected")
 
 
+@interactive_test
 class ControllerInteractiveTest(unittest.TestCase):
     __tags__ = ["interactive"]
 

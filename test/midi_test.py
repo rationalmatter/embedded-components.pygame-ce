@@ -1,8 +1,10 @@
 import unittest
 
 import pygame
+from pygame.tests.test_utils import interactive_test
 
 
+@interactive_test
 class MidiInputTest(unittest.TestCase):
     __tags__ = ["interactive"]
 
@@ -70,6 +72,7 @@ class MidiInputTest(unittest.TestCase):
         self.assertIsNone(self.midi_input._input)
 
 
+@interactive_test
 class MidiOutputTest(unittest.TestCase):
     __tags__ = ["interactive"]
 
@@ -229,6 +232,7 @@ class MidiOutputTest(unittest.TestCase):
         self.assertEqual(self.midi_output._aborted, 1)
 
 
+@interactive_test
 class MidiModuleTest(unittest.TestCase):
     """Midi module tests that require midi hardware or midi.init().
 

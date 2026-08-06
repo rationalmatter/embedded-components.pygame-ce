@@ -3,7 +3,7 @@ import unittest
 
 import pygame
 from pygame._sdl2 import touch
-from pygame.tests.test_utils import question
+from pygame.tests.test_utils import interactive_test, question
 
 
 class TouchTest(unittest.TestCase):
@@ -39,6 +39,7 @@ class TouchTest(unittest.TestCase):
         self.assertRaises(pygame.error, touch.get_num_fingers, -1234)
 
 
+@interactive_test
 class TouchInteractiveTest(unittest.TestCase):
     __tags__ = ["interactive"]
 

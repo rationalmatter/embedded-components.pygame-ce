@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 
 import pygame
 from pygame import mixer
-from pygame.tests.test_utils import example_path, prompt, question
+from pygame.tests.test_utils import example_path, interactive_test, prompt, question
 
 IS_PYPY = "PyPy" == platform.python_implementation()
 
@@ -975,6 +975,7 @@ class ChannelTypeTest(unittest.TestCase):
             pass
 
 
+@interactive_test
 class ChannelInteractiveTest(unittest.TestCase):
     __tags__ = ["interactive"]
 

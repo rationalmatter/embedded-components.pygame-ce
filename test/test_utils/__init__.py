@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import unittest
 
 import pygame
 
@@ -56,6 +57,31 @@ def question(q):
 
 def prompt(p):
     return input(f"\n{p.rstrip(' ')} (press enter to continue): ")
+
+
+def _has_terminal():
+    stdin = sys.stdin
+    try:
+        return stdin is not None and stdin.isatty()
+    except (AttributeError, ValueError):
+        # A closed or replaced stdin is by definition not a terminal.
+        return False
+
+
+# Decorator for the test cases tagged "interactive": they show something on
+# screen and ask the person running them to confirm it, via question() and
+# prompt() above, which call input().
+#
+# The __tags__ attribute those cases carry is only understood by pygame's own
+# test runner. Under any other runner -- pytest, unittest discovery -- they are
+# collected and run like everything else, and the prompt then has nobody to
+# answer it: it either blocks the run or raises EOFError, neither of which is a
+# useful result. Requiring a terminal is the underlying precondition anyway, so
+# state it in a form every runner understands, leaving the tags in place for the
+# runner that does understand them.
+interactive_test = unittest.skipUnless(
+    _has_terminal(), "interactive test: needs a terminal to answer prompts"
+)
 
 
 #################################### HELPERS ##################################

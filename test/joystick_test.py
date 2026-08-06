@@ -2,7 +2,7 @@ import unittest
 
 import pygame
 import pygame._sdl2.controller
-from pygame.tests.test_utils import prompt, question
+from pygame.tests.test_utils import interactive_test, prompt, question
 
 
 class JoystickTypeTest(unittest.TestCase):
@@ -128,6 +128,7 @@ class JoystickModuleTest(unittest.TestCase):
             pygame.joystick.quit()
 
 
+@interactive_test
 class JoystickInteractiveTest(unittest.TestCase):
     __tags__ = ["interactive"]
 

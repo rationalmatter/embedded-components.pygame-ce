@@ -6,7 +6,7 @@ import unittest
 import pygame
 import pygame.transform
 from pygame import display
-from pygame.tests.test_utils import question
+from pygame.tests.test_utils import interactive_test, question
 
 pygame.display.init()
 is_wayland = pygame.display.get_driver() == "wayland"
@@ -859,6 +859,7 @@ class DisplayUpdateTest(unittest.TestCase):
             pygame.display.update()
 
 
+@interactive_test
 class DisplayUpdateInteractiveTest(DisplayUpdateTest):
     """Because we want these tests to run as interactive and not interactive."""
 
@@ -869,6 +870,7 @@ class DisplayUpdateInteractiveTest(DisplayUpdateTest):
         question(qstr)
 
 
+@interactive_test
 class DisplayInteractiveTest(unittest.TestCase):
     __tags__ = ["interactive"]
 
@@ -919,6 +921,7 @@ class DisplayInteractiveTest(unittest.TestCase):
         pygame.display.quit()
 
 
+@interactive_test
 class FullscreenToggleTestsInteractive(unittest.TestCase):
     __tags__ = ["interactive"]
 
@@ -1036,6 +1039,7 @@ class MessageBoxTest(unittest.TestCase):
         self.assertRaises(TypeError, lambda: mb("", parent_window=123456))
 
 
+@interactive_test
 class MessageBoxInteractiveTest(unittest.TestCase):
     __tags__ = ["interactive"]
 
