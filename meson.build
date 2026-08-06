@@ -425,66 +425,111 @@ else
 endif
 
 # optional
-sdl_image_dep = dependency(sdl_image, required: false)
-if not sdl_image_dep.found()
-    sdl_image_dep = declare_dependency(
-        include_directories: pg_inc_dirs,
-        dependencies: cc.find_library(
-            sdl_image,
-            dirs: pg_lib_dirs,
-            required: get_option('image'),
-        ),
-    )
+#
+# A `disabled` feature must not be configured at all. The fallback below wraps
+# `cc.find_library()` in `declare_dependency()`, and an internal dependency
+# always reports itself as found -- so without the explicit `disabled()` branch
+# the corresponding extension module is still built even though its feature was
+# turned off. On a platform whose link step defers unresolved symbols to load
+# time (any Apple target linking with `-undefined dynamic_lookup`) that module
+# links cleanly and then fails at *import*, instead of simply being absent and
+# degrading to the package's own missing-module placeholder.
+#
+# `dependency('', required: false)` is meson's not-found dependency object, so
+# every downstream `<dep>.found()` gate -- including the one in `src_py` that
+# installs `ftfont.py` as `font.py` when SDL_ttf is absent but FreeType is
+# present -- keeps working unchanged.
+if get_option('image').disabled()
+    sdl_image_dep = dependency('', required: false)
+else
+    sdl_image_dep = dependency(sdl_image, required: false)
+    if not sdl_image_dep.found()
+        sdl_image_dep = declare_dependency(
+            include_directories: pg_inc_dirs,
+            dependencies: cc.find_library(
+                sdl_image,
+                dirs: pg_lib_dirs,
+                required: get_option('image'),
+            ),
+        )
+    endif
 endif
 
-sdl_mixer_dep = dependency(sdl_mixer, required: false)
-if not sdl_mixer_dep.found()
-    sdl_mixer_dep = declare_dependency(
-        include_directories: pg_inc_dirs,
-        dependencies: cc.find_library(
-            sdl_mixer,
-            dirs: pg_lib_dirs,
-            required: get_option('mixer'),
-        ),
-    )
+if get_option('mixer').disabled()
+    sdl_mixer_dep = dependency('', required: false)
+else
+    sdl_mixer_dep = dependency(sdl_mixer, required: false)
+    if not sdl_mixer_dep.found()
+        sdl_mixer_dep = declare_dependency(
+            include_directories: pg_inc_dirs,
+            dependencies: cc.find_library(
+                sdl_mixer,
+                dirs: pg_lib_dirs,
+                required: get_option('mixer'),
+            ),
+        )
+    endif
 endif
 
-sdl_ttf_dep = dependency(sdl_ttf, required: false)
-if not sdl_ttf_dep.found()
-    sdl_ttf_dep = declare_dependency(
-        include_directories: pg_inc_dirs,
-        dependencies: cc.find_library(
-            sdl_ttf,
-            dirs: pg_lib_dirs,
-            required: get_option('font'),
-        ),
-    )
+if get_option('font').disabled()
+    sdl_ttf_dep = dependency('', required: false)
+else
+    sdl_ttf_dep = dependency(sdl_ttf, required: false)
+    if not sdl_ttf_dep.found()
+        sdl_ttf_dep = declare_dependency(
+            include_directories: pg_inc_dirs,
+            dependencies: cc.find_library(
+                sdl_ttf,
+                dirs: pg_lib_dirs,
+                required: get_option('font'),
+            ),
+        )
+    endif
 endif
 
-freetype_dep = dependency('freetype2', required: false)
-if not freetype_dep.found()
-    freetype_dep = declare_dependency(
-        include_directories: pg_inc_dirs,
-        dependencies: cc.find_library(
-            'freetype',
-            dirs: pg_lib_dirs,
-            required: get_option('freetype'),
-        ),
+if get_option('freetype').disabled()
+    freetype_dep = dependency('', required: false)
+elif meson.is_cross_build()
+    # Same reasoning as the SDL dependency above: on a cross build pkg-config
+    # is the only method that describes the target. The extra-framework method
+    # is live for every Darwin-family target, so an absent or malformed
+    # `freetype2.pc` would otherwise fall through to a build-machine framework
+    # rather than fail.
+    freetype_dep = dependency(
+        'freetype2',
+        method: 'pkg-config',
+        required: get_option('freetype'),
     )
+else
+    freetype_dep = dependency('freetype2', required: false)
+    if not freetype_dep.found()
+        freetype_dep = declare_dependency(
+            include_directories: pg_inc_dirs,
+            dependencies: cc.find_library(
+                'freetype',
+                dirs: pg_lib_dirs,
+                required: get_option('freetype'),
+            ),
+        )
+    endif
 endif
 
 endif # emscripten
 
-portmidi_dep = dependency('portmidi', required: false)
-if not portmidi_dep.found() and not plat.startswith('emscripten')
-    portmidi_dep = declare_dependency(
-        include_directories: pg_inc_dirs,
-        dependencies: cc.find_library(
-            'portmidi',
-            dirs: pg_lib_dirs,
-            required: get_option('midi'),
-        ),
-    )
+if get_option('midi').disabled()
+    portmidi_dep = dependency('', required: false)
+else
+    portmidi_dep = dependency('portmidi', required: false)
+    if not portmidi_dep.found() and not plat.startswith('emscripten')
+        portmidi_dep = declare_dependency(
+            include_directories: pg_inc_dirs,
+            dependencies: cc.find_library(
+                'portmidi',
+                dirs: pg_lib_dirs,
+                required: get_option('midi'),
+            ),
+        )
+    endif
 endif
 
 portmidi_deps = [portmidi_dep]
