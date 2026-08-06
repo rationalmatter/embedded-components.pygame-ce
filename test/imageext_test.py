@@ -9,6 +9,14 @@ import pygame.image
 import pygame.pkgdata
 from pygame.tests.test_utils import example_path
 
+# pygame.imageext only exists in a build made with SDL_image; pygame drops it
+# from its own namespace either way, so sys.modules is the only handle on it.
+# Without the guard this lookup raises KeyError while the module is imported,
+# which makes a discovery-based runner report a collection error instead of a
+# skip.
+if "pygame.imageext" not in sys.modules:
+    raise unittest.SkipTest("pygame.imageext is not available")
+
 imageext = sys.modules["pygame.imageext"]
 
 

@@ -28,6 +28,21 @@ def equal_images(s1, s2):
 
 IS_PYPY = "PyPy" == platform.python_implementation()
 
+# pygame.font is backed either by SDL_ttf or, in a build made without it, by
+# the freetype implementation installed in its place. Only the former exposes
+# get_sdl_ttf_version(). The class bodies below are executed at import time, so
+# calling it unconditionally there makes the whole module fail to load rather
+# than skip. Report (0, 0, 0) when there is no SDL_ttf: every version gate then
+# reads as "older than required" and the SDL_ttf-specific cases skip, which is
+# what a build without SDL_ttf wants.
+_get_sdl_ttf_version = getattr(pygame.font, "get_sdl_ttf_version", None)
+
+
+def sdl_ttf_version():
+    if _get_sdl_ttf_version is None:
+        return (0, 0, 0)
+    return _get_sdl_ttf_version()
+
 
 @unittest.skipIf(IS_PYPY, "pypy skip known failure")  # TODO
 class FontModuleTest(unittest.TestCase):
@@ -319,9 +334,7 @@ class FontTest(unittest.TestCase):
         two_lines = f.render("hello\nworld", False, "black", None, 200)
         self.assertGreater(two_lines.get_height(), one_line.get_height())
 
-    @unittest.skipIf(
-        pygame.font.get_sdl_ttf_version() < (2, 22, 0), "bug fixed in SDL_ttf 2.22.0"
-    )
+    @unittest.skipIf(sdl_ttf_version() < (2, 22, 0), "bug fixed in SDL_ttf 2.22.0")
     def test_render_multiple_newlines(self):
         if pygame_font.__name__ == "pygame.ftfont":
             return
@@ -388,7 +401,7 @@ class FontTypeTest(unittest.TestCase):
         self.assertTrue(linesize > 0)
 
     @unittest.skipIf(
-        pygame.font.get_sdl_ttf_version() < (2, 24, 0),
+        sdl_ttf_version() < (2, 24, 0),
         "supported in SDL_ttf 2.24.0 onwards",
     )
     def test_set_linesize(self):

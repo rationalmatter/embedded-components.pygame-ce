@@ -8,6 +8,14 @@ from tempfile import TemporaryDirectory
 import pygame
 from pygame.tests.test_utils import example_path
 
+# In a build made without SDL_mixer, pygame.mixer is the MissingModule
+# placeholder, which raises NotImplementedError on any attribute access. The
+# class bodies below call pygame.mixer.get_sdl_mixer_version() at import time,
+# so without the guard the module raises while it is imported and a
+# discovery-based runner reports a collection error instead of a skip.
+if not pygame.mixer:
+    raise unittest.SkipTest("pygame.mixer is not available")
+
 
 class MixerMusicModuleTest(unittest.TestCase):
     @classmethod

@@ -21,6 +21,13 @@ if _sdl_image_ver is not None:
         _sdl_image_ver <= (2, 0, 5) and pygame.get_sdl_byteorder() == pygame.BIG_ENDIAN
     )
 
+# get_sdl_image_version() returns None in a build made without SDL_image, and
+# the version gates below are evaluated at import time, so comparing that None
+# makes the whole module fail to load rather than skip. (0, 0, 0) reads as
+# "older than required" in every gate, so the cases that need a particular
+# SDL_image skip themselves - which is what a build without SDL_image wants.
+SDL_IMAGE_VERSION = _sdl_image_ver or (0, 0, 0)
+
 PG_DEPS_FROM_SYSTEM = "PG_DEPS_FROM_SYSTEM" in os.environ
 
 
@@ -1319,7 +1326,7 @@ class ImageModuleTest(unittest.TestCase):
                 self.assertEqual(surf.get_at((0, 0)), expected_color)
 
     @unittest.skipIf(
-        pygame.image.get_sdl_image_version() < (2, 6, 0),
+        SDL_IMAGE_VERSION < (2, 6, 0),
         "load_sized_svg requires SDL_image 2.6.0+",
     )
     def test_load_sized_svg(self):
@@ -1359,7 +1366,7 @@ class ImageModuleTest(unittest.TestCase):
                 )
 
     @unittest.skipIf(
-        pygame.image.get_sdl_image_version() < (2, 6, 0),
+        SDL_IMAGE_VERSION < (2, 6, 0),
         "load_sized_svg requires SDL_image 2.6.0+",
     )
     def test_load_sized_svg_erroring(self):
@@ -1398,7 +1405,7 @@ class ImageModuleTest(unittest.TestCase):
                 )
 
     @unittest.skipIf(
-        pygame.image.get_sdl_image_version() < (2, 6, 0),
+        SDL_IMAGE_VERSION < (2, 6, 0),
         "load_animation requires SDL_image 2.6.0+",
     )
     def test_load_animation(self):
