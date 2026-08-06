@@ -43,3 +43,9 @@ option('sdl_api', type: 'integer', min: 2, max: 3, value: 2)
 
 # Specify the type of emscripten build being done.
 option('emscripten_type', type: 'combo', choices: ['pyodide', 'pygbag'])
+
+# Prefix holding the include/ and lib/ directories of the dependencies to build
+# against, searched ahead of the standard system prefixes. On a cross build it
+# is the only prefix searched, since the build machine's prefixes describe the
+# wrong target. Empty by default, which leaves native builds unchanged.
+option('deps_prefix', type: 'string', value: '')

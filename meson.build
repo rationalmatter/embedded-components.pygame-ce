@@ -351,21 +351,36 @@ if plat == 'win'
     install_data(dlls, install_dir: pg_dir, install_tag: 'pg-tag')
 
 else
-    homebrew_prefix = '/opt/homebrew'
+    deps_prefix = get_option('deps_prefix')
 
-    brew_cmd = find_program('brew', required: false)
+    if meson.is_cross_build()
+        # Never search the build machine's prefixes on a cross build. A build
+        # machine header or library that shadows the target one does not fail
+        # the build, it produces a silently mismatched ABI, so the only search
+        # root here is whatever the caller passes in `deps_prefix`.
+        bases = []
+    else
+        homebrew_prefix = '/opt/homebrew'
 
-    if brew_cmd.found()
-        result = run_command(brew_cmd, '--prefix', check: false)
-        if result.returncode() == 0
-            detected_prefix = result.stdout().strip()
-            if detected_prefix != '' and fs.is_dir(detected_prefix)
-                homebrew_prefix = detected_prefix
+        brew_cmd = find_program('brew', required: false)
+
+        if brew_cmd.found()
+            result = run_command(brew_cmd, '--prefix', check: false)
+            if result.returncode() == 0
+                detected_prefix = result.stdout().strip()
+                if detected_prefix != '' and fs.is_dir(detected_prefix)
+                    homebrew_prefix = detected_prefix
+                endif
             endif
         endif
+
+        bases = ['/usr/local', '/usr', homebrew_prefix, '/opt/local']
     endif
 
-    bases = ['/usr/local', '/usr', homebrew_prefix, '/opt/local']
+    if deps_prefix != ''
+        bases = [deps_prefix] + bases
+    endif
+
     foreach inc_dir : bases
         foreach sub_inc : [
             '',
@@ -390,12 +405,23 @@ else
 endif
 
 # TODO: add version constraints?
-sdl_dep = dependency(sdl, required: false)
-if not sdl_dep.found()
-    sdl_dep = declare_dependency(
-        include_directories: pg_inc_dirs,
-        dependencies: cc.find_library(sdl, dirs: pg_lib_dirs),
-    )
+if meson.is_cross_build()
+    # pkg-config is the only dependency method that can describe the target
+    # SDL; the alternatives all describe the build machine instead. The
+    # config-tool method runs the build machine's sdl2-config, and the
+    # extra-framework method looks in the build machine's framework
+    # directories -- and the latter is live for every Darwin-family target, so
+    # a malformed or missing .pc file would fall through to a host framework
+    # rather than fail. Pin the method and let a failure be a failure.
+    sdl_dep = dependency(sdl.to_lower(), method: 'pkg-config', required: true)
+else
+    sdl_dep = dependency(sdl, required: false)
+    if not sdl_dep.found()
+        sdl_dep = declare_dependency(
+            include_directories: pg_inc_dirs,
+            dependencies: cc.find_library(sdl, dirs: pg_lib_dirs),
+        )
+    endif
 endif
 
 # optional
