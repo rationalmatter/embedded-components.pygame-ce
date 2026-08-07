@@ -2161,6 +2161,43 @@ static PyMethodDef _base_methods[] = {
 #endif
     {NULL, NULL, 0, NULL}};
 
+#ifdef PG_PER_INTERPRETER_STATE
+/*
+ * Slots 0 and 18 carry these accessors rather than the exception objects
+ * themselves; _pygame.h calls through them where it would otherwise read the
+ * slot.
+ *
+ * Every other entry in the table below is a process-wide address -- a
+ * function, or a file-scope type object -- so every interpreter's init cycle
+ * writes the same bytes there and one shared table is exactly right for them.
+ * These two are the exception: pgExc_SDLError and pgExc_BufferError are per
+ * interpreter (see their declarations at the top of this file), so storing the
+ * object would publish whichever interpreter initialised last to all of them,
+ * and leave a freed pointer behind once that interpreter is gone -- a
+ * consumer's `except pygame.error` would stop catching what pygame raises.
+ *
+ * Storing the address of the per-interpreter cell instead does not help: that
+ * address is itself per interpreter, so a shared slot would hold one
+ * interpreter's cell and the problem would come back one level down. A
+ * function address is the one thing here that is the same in every
+ * interpreter, and calling it resolves the object at raise time, in this file,
+ * where the storage key is a single fixed call site.
+ *
+ * Cost is one storage lookup per exception raise, which is not a hot path.
+ */
+static PyObject *
+pg_GetSDLErrorType(void)
+{
+    return pgExc_SDLError;
+}
+
+static PyObject *
+pg_GetBufferErrorType(void)
+{
+    return pgExc_BufferError;
+}
+#endif /* PG_PER_INTERPRETER_STATE */
+
 static void *c_api[PYGAMEAPI_BASE_NUMSLOTS];
 
 MODINIT_DEFINE(base)
@@ -2204,7 +2241,11 @@ MODINIT_DEFINE(base)
     }
 
     /* export the c api */
+#ifdef PG_PER_INTERPRETER_STATE
+    c_api[0] = pg_GetSDLErrorType;
+#else
     c_api[0] = pgExc_SDLError;
+#endif
     c_api[1] = pg_RegisterQuit;
     c_api[2] = pg_IntFromObj;
     c_api[3] = pg_IntFromObjIndex;
@@ -2222,7 +2263,11 @@ MODINIT_DEFINE(base)
     c_api[15] = pgObject_GetBuffer;
     c_api[16] = pgBuffer_Release;
     c_api[17] = pgDict_AsBuffer;
+#ifdef PG_PER_INTERPRETER_STATE
+    c_api[18] = pg_GetBufferErrorType;
+#else
     c_api[18] = pgExc_BufferError;
+#endif
     c_api[19] = pg_GetDefaultWindow;
     c_api[20] = pg_SetDefaultWindow;
     c_api[21] = pg_GetDefaultWindowSurface;

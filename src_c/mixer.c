@@ -2136,6 +2136,14 @@ MODINIT_DEFINE(mixer)
 #endif
 {
     PyObject *module, *apiobj, *music = NULL;
+    /* Process-wide, and correctly so. Every entry below is either a function
+     * or the address of a file-scope type object, so each interpreter's init
+     * cycle writes this table with the same bytes, nothing in it is freed when
+     * an interpreter goes away, and one table for the process is what the
+     * consumers want. Nothing here needs per-interpreter storage, whether or
+     * not the `mixer` feature option is ever enabled. (This module's own
+     * module-level state is a separate question, and unaddressed: it is not
+     * built, so none of it has been exercised.) */
     static void *c_api[PYGAMEAPI_MIXER_NUMSLOTS];
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,

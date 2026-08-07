@@ -106,7 +106,17 @@ typedef struct pg_bufferinfo_s {
  * BASE module
  */
 #ifndef PYGAMEAPI_BASE_INTERNAL
+#ifdef PG_PER_INTERPRETER_STATE
+/* These two slots carry an accessor rather than the object, because the two
+ * exceptions are the only entries in base's table that differ per
+ * interpreter; base.c says why, next to where it fills them in. Reading them
+ * costs a call and a storage lookup, on the raise path only. Every other slot
+ * below is read exactly as upstream reads it. */
+#define pgExc_SDLError \
+    ((*(PyObject * (*)(void)) PYGAMEAPI_GET_SLOT(base, 0))())
+#else
 #define pgExc_SDLError ((PyObject *)PYGAMEAPI_GET_SLOT(base, 0))
+#endif
 
 #define pg_RegisterQuit \
     (*(void (*)(void (*)(void)))PYGAMEAPI_GET_SLOT(base, 1))
@@ -166,7 +176,13 @@ typedef struct pg_bufferinfo_s {
 #define pgDict_AsBuffer \
     (*(int (*)(pg_buffer *, PyObject *, int))PYGAMEAPI_GET_SLOT(base, 17))
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* An accessor, for the reason given at slot 0 above. */
+#define pgExc_BufferError \
+    ((*(PyObject * (*)(void)) PYGAMEAPI_GET_SLOT(base, 18))())
+#else
 #define pgExc_BufferError ((PyObject *)PYGAMEAPI_GET_SLOT(base, 18))
+#endif
 
 #define pg_GetDefaultWindow \
     (*(SDL_Window * (*)(void)) PYGAMEAPI_GET_SLOT(base, 19))

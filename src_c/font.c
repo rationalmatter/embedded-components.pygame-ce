@@ -1483,6 +1483,25 @@ PyFont_New(TTF_Font *font)
 MODINIT_DEFINE(font)
 {
     PyObject *module, *apiobj;
+    /* Process-wide, and correctly so: all three entries below are process-wide
+     * addresses -- a function, a file-scope type object, and the address of
+     * the file-scope `font_initialized` flag -- so each interpreter's init
+     * cycle writes the same bytes here and one table for the process is what
+     * the consumers want.
+     *
+     * The flag whose address slot 2 publishes is a different matter, and IS
+     * broken across interpreters: `static int font_initialized` is one counter
+     * for the process, and this module both reads and writes it.
+     * `pygame.font.init()` in a second interpreter finds it already set by the
+     * first and skips TTF_Init(); `pygame.font.quit()` in either one calls
+     * TTF_Quit() and clears it for both, while the other still holds open Font
+     * objects. Nothing in this tree reads slot 2 -- pygame_font.h exposes only
+     * slots 0 and 1 -- so the damage is entirely inside this file. Whoever
+     * enables the `font` feature option has to make that flag per interpreter
+     * (real module state is the better shape; scrap.c is the worked example)
+     * before the module can be used from more than one. It is left alone here
+     * because a build with the option off never compiles this file, so no fix
+     * to it could be exercised. */
     static void *c_api[PYGAMEAPI_FONT_NUMSLOTS];
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
