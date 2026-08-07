@@ -136,6 +136,27 @@ static char released_mouse_buttons[5] = {0};
     }
 #endif /* not on emscripten */
 
+/* Clear everything the event filter maintains about which keys and buttons
+ * are down. All of it outlives a quit, so a later init cycle would otherwise
+ * start out reporting the state the previous one left behind: the four arrays
+ * until the first pumping call memsets them, and the unicode cache and the
+ * pending keydown event until a matching event happens to overwrite the
+ * entry. Done under the event-filter mutex because a quit does not uninstall
+ * the filter -- the video subsystem shutting down does -- so it can still be
+ * writing all of this from whichever thread is pumping events. */
+static void
+_pg_reset_input_state(void)
+{
+    PG_LOCK_EVFILTER_MUTEX
+    memset(pressed_keys, 0, sizeof(pressed_keys));
+    memset(released_keys, 0, sizeof(released_keys));
+    memset(pressed_mouse_buttons, 0, sizeof(pressed_mouse_buttons));
+    memset(released_mouse_buttons, 0, sizeof(released_mouse_buttons));
+    memset(scanunicode, 0, sizeof(scanunicode));
+    memset(&_pg_last_keydown_event, 0, sizeof(_pg_last_keydown_event));
+    PG_UNLOCK_EVFILTER_MUTEX
+}
+
 static Uint32
 _pg_pgevent_proxify(Uint32 type);
 static Uint32
@@ -799,15 +820,9 @@ pgEvent_AutoQuit(PyObject *self, PyObject *_null)
          * test preventing further tests from getting a custom event type.*/
         _custom_event = _PGE_CUSTOM_EVENT_INIT;
     }
-    /* The pressed/released arrays outlive the module, so without this a later
-     * init cycle starts out reporting the keys and buttons that were down when
-     * this one quit, until the first pumping call clears them. Reset
-     * unconditionally: the init flag is shared state too, and cannot be relied
-     * on to track a single quit. */
-    memset(pressed_keys, 0, sizeof(pressed_keys));
-    memset(released_keys, 0, sizeof(released_keys));
-    memset(pressed_mouse_buttons, 0, sizeof(pressed_mouse_buttons));
-    memset(released_mouse_buttons, 0, sizeof(released_mouse_buttons));
+    /* Reset unconditionally: the init flag is shared state as well, and
+     * cannot be relied on to track a single quit. */
+    _pg_reset_input_state();
     _pg_event_is_init = 0;
     Py_RETURN_NONE;
 }
@@ -834,6 +849,11 @@ pgEvent_AutoInit(PyObject *self, PyObject *_null)
         }
 #endif
     }
+    /* And on the way in as well, outside the guard for the same reason: a
+     * cycle that never quits, or whose quit found the shared init flag
+     * already clear, would otherwise start on the state left by the last one
+     * to run. */
+    _pg_reset_input_state();
     _pg_event_is_init = 1;
     Py_RETURN_NONE;
 }
