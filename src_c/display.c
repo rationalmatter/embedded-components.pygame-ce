@@ -191,8 +191,19 @@ pg_display_quit(PyObject *self, PyObject *_null)
     if (pg_GetDefaultWindowSurface()) {
         pgSurface_AsSurface(pg_GetDefaultWindowSurface()) = NULL;
         pg_SetDefaultWindowSurface(NULL);
-        pg_SetDefaultWindow(NULL);
     }
+    /* The default window belongs to the video session being torn down here,
+     * so giving it back is not conditional on this interpreter also holding
+     * the display surface. Upstream the two are always set and cleared as a
+     * pair, but the surface is a Python object: where module-level object
+     * references are stored per interpreter, the surface lives in whichever
+     * interpreter created it while the window stays process-wide. A later
+     * interpreter therefore reaches this quit holding no surface of its own
+     * and an earlier one's window still installed, and skipping the release
+     * would let the SDL_QuitSubSystem call below free that window while the
+     * pointer to it survives -- after which every display call drives SDL
+     * through freed memory. */
+    pg_SetDefaultWindow(NULL);
     /* The default convert format belongs to the video session being torn
      * down here. It is only ever set (by Window.get_surface) when it is 0,
      * so without this reset the first window of one session leaks its
