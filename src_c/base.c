@@ -1985,7 +1985,19 @@ pg_SetDefaultWindow(SDL_Window *win)
     if (win == pg_default_window) {
         return;
     }
-    if (pg_default_window) {
+    /* Destroy the outgoing window only while the video session that created
+     * it is still up. Upstream every caller is in that position -- display
+     * quit gives the window back before it takes the subsystem down -- so
+     * nothing changes there.
+     *
+     * Where the subsystem is already down the session ended without this
+     * module hearing about it, which happens when something outside pygame
+     * quits the video subsystem directly: that frees the device and
+     * destroys every window it owned, and this pointer survives it.
+     * Destroying then is not merely redundant, it reads the freed window
+     * through SDL's handle check. The pointer is only
+     * to be forgotten, which is what the assignment below does on its own. */
+    if (pg_default_window && SDL_WasInit(SDL_INIT_VIDEO)) {
         SDL_DestroyWindow(pg_default_window);
     }
     pg_default_window = win;

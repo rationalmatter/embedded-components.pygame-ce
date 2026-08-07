@@ -236,6 +236,59 @@ pg_display_release_surface(PyObject *self, PyObject *_null)
     Py_RETURN_NONE;
 }
 
+/*
+ * Forget everything that belonged to a video session this module did not see
+ * end, and do nothing at all while a session is up.
+ *
+ * Quit is the orderly end of a session and clears all of this on its way
+ * out. A session can also end without pygame being told, when something
+ * outside this module quits the video subsystem directly -- which an
+ * embedder may have to do, since the interpreter that opened the display
+ * is not always still around to close it. Quitting the subsystem frees
+ * the video device and destroys every window it owned. What is left here
+ * is a set of pointers to freed things, in storage
+ * that is process-wide and so outlives the interpreter that filled it.
+ *
+ * They must be given up before the next session starts, because they are
+ * indistinguishable from a live display: set_mode reads the default window,
+ * finds it non-null, and takes its "change the existing window" path against
+ * a window SDL has already freed. That path fails on SDL's handle check and
+ * raises, and -- because it raises without giving the window back -- it
+ * raises the same way on every later call, for the life of the process.
+ *
+ * Nothing here destroys. Every one of these was freed or destroyed when the
+ * session went, and a second destroy is the use-after-free this exists to
+ * prevent; the renderer and its texture in particular are cleared by
+ * assignment for exactly that reason. Releasing the display surface is not a
+ * free either -- it nulls the Python object's handle on a surface the window
+ * took with it, so later use raises the usual quit error instead of reading
+ * through it, and drops the reference this storage owns.
+ *
+ * On a build with one process-wide session and no host to end it behind
+ * pygame's back, every branch below is unreachable in the sense that matters:
+ * before the first init the pointers are already null, after a quit that quit
+ * already cleared them.
+ */
+static void
+_display_session_forget(void)
+{
+    if (SDL_WasInit(SDL_INIT_VIDEO)) {
+        return;
+    }
+
+    pg_texture = NULL;
+    pg_renderer = NULL;
+
+    _display_surface_release();
+    /* Safe now that the destroy is conditional on the session being up: with
+     * it down this only forgets the window. */
+    pg_SetDefaultWindow(NULL);
+    /* Same reasoning as quit's reset: the format is only ever set when it is
+     * 0, so one session's first window would otherwise dictate the convert
+     * format for every session after it in this process. */
+    pg_SetDefaultConvertFormat(0);
+}
+
 /* init routines */
 static PyObject *
 pg_display_quit(PyObject *self, PyObject *_null)
@@ -343,6 +396,15 @@ static PyObject *
 pg_display_init(PyObject *self, PyObject *_null)
 {
     const char *drivername;
+
+    /* This is where a new video session begins -- it holds the only call
+     * that brings the subsystem up -- so it is where the previous session's
+     * pointers are given up. Every route in reaches it: init here, the
+     * autoinit list that starts with this module, and the implicit init in
+     * set_mode and set_icon. Those last two read the default window before
+     * they get here and so ask for the same thing themselves. */
+    _display_session_forget();
+
     /* Compatibility:
      * windib video driver was renamed in SDL2, and we don't want it to fail.
      */
@@ -1316,6 +1378,14 @@ static PyObject *
 pg_set_mode(PyObject *self, PyObject *arg, PyObject *kwds)
 {
     static const char *const DefaultTitle = "pygame window";
+
+    /* Before anything reads the default window, not inside the implicit init
+     * further down: the window and the surface are picked up by the
+     * initialisers immediately below, and _get_display asks SDL for the
+     * window's display index while it is at it. By the time the implicit
+     * init runs, this function is already holding -- and has already used --
+     * whatever the last session left behind. */
+    _display_session_forget();
 
     _DisplayState *state = DISPLAY_MOD_STATE(self);
     SDL_Window *win = pg_GetDefaultWindow();
@@ -2832,6 +2902,11 @@ pg_get_caption(PyObject *self, PyObject *_null)
 static PyObject *
 pg_set_icon(PyObject *self, PyObject *surface)
 {
+    /* Same order of events as set_mode: the default window is read by the
+     * initialiser below and handed to SDL at the end of this function, both
+     * outside the implicit init in between. */
+    _display_session_forget();
+
     _DisplayState *state = DISPLAY_MOD_STATE(self);
     SDL_Window *win = pg_GetDefaultWindow();
     if (!pgSurface_Check(surface)) {
