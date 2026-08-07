@@ -137,8 +137,16 @@ window_destroy(pgWindowObject *self, PyObject *_null)
 {
     if (self->_win) {
         if (self->_is_borrowed && pg_GetDefaultWindow() == self->_win) {
-            pgSurface_AsSurface(pg_GetDefaultWindowSurface()) = NULL;
-            pg_SetDefaultWindowSurface(NULL);
+            /* The window is a process-wide SDL handle and the display
+             * surface is a Python object belonging to the interpreter that
+             * created it, so this borrowed window can be the default one
+             * while the surface to go with it is absent -- and
+             * from_display_module() hands one out on the strength of the
+             * window alone. Clearing it then wrote through NULL. */
+            if (pg_GetDefaultWindowSurface()) {
+                pgSurface_AsSurface(pg_GetDefaultWindowSurface()) = NULL;
+                pg_SetDefaultWindowSurface(NULL);
+            }
             pg_SetDefaultWindow(NULL);
         }
 
