@@ -779,19 +779,10 @@ static PyMethodDef _pg_module_methods[] = {{NULL, NULL, 0, NULL}};
 
 static char _pg_module_doc[] = "Module for the rectangle object\n";
 
-#ifdef PG_PER_INTERPRETER_STATE
-/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
-PG_CONTEXT_API_TABLE(rect, PYGAMEAPI_RECT_NUMSLOTS)
-#endif
-
 MODINIT_DEFINE(rect)
 {
     PyObject *module, *apiobj;
-#ifdef PG_PER_INTERPRETER_STATE
-    void **c_api = PG_CONTEXT_API_TABLE_VAR(rect);
-#else
     static void *c_api[PYGAMEAPI_RECT_NUMSLOTS];
-#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "rect",

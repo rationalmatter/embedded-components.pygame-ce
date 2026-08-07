@@ -200,19 +200,10 @@ static PyMethodDef _surflock_methods[] = {{NULL, NULL, 0, NULL}};
 /*DOC*/ static char _surflock_doc[] =
     /*DOC*/ "Surface locking support";
 
-#ifdef PG_PER_INTERPRETER_STATE
-/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
-PG_CONTEXT_API_TABLE(surflock, PYGAMEAPI_SURFLOCK_NUMSLOTS)
-#endif
-
 MODINIT_DEFINE(surflock)
 {
     PyObject *module, *apiobj;
-#ifdef PG_PER_INTERPRETER_STATE
-    void **c_api = PG_CONTEXT_API_TABLE_VAR(surflock);
-#else
     static void *c_api[PYGAMEAPI_SURFLOCK_NUMSLOTS];
-#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "surflock",

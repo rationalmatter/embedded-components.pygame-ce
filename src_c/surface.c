@@ -4663,11 +4663,6 @@ pgSurface_Blit(pgSurfaceObject *dstobj, pgSurfaceObject *srcobj,
 
 static PyMethodDef _surface_methods[] = {{NULL, NULL, 0, NULL}};
 
-#ifdef PG_PER_INTERPRETER_STATE
-/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
-PG_CONTEXT_API_TABLE(surface, PYGAMEAPI_SURFACE_NUMSLOTS)
-#endif
-
 int
 exec_surface(PyObject *module)
 {
@@ -4701,11 +4696,7 @@ exec_surface(PyObject *module)
     }
 
     PyObject *apiobj;
-#ifdef PG_PER_INTERPRETER_STATE
-    void **c_api = PG_CONTEXT_API_TABLE_VAR(surface);
-#else
     static void *c_api[PYGAMEAPI_SURFACE_NUMSLOTS];
-#endif
 #ifndef BUILD_STATIC
     if (pg_warn_simd_at_runtime_but_uncompiled() < 0) {
         return -1;

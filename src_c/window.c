@@ -1481,19 +1481,10 @@ static PyMethodDef _window_methods[] = {
      "auto quit for window module"},
     {NULL, NULL, 0, NULL}};
 
-#ifdef PG_PER_INTERPRETER_STATE
-/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
-PG_CONTEXT_API_TABLE(window, PYGAMEAPI_WINDOW_NUMSLOTS)
-#endif
-
 MODINIT_DEFINE(window)
 {
     PyObject *module, *apiobj;
-#ifdef PG_PER_INTERPRETER_STATE
-    void **c_api = PG_CONTEXT_API_TABLE_VAR(window);
-#else
     static void *c_api[PYGAMEAPI_WINDOW_NUMSLOTS];
-#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "window",
