@@ -43,16 +43,29 @@
 /**
  * Indicates, whether pygame.scrap was initialized or not.
  */
+#ifdef PG_PER_INTERPRETER_STATE
+/* Everything this flag gates is per-interpreter: the check every entry point
+ * below makes, and the creation of the dicts underneath it. Left process-wide
+ * it would report the module initialized to an interpreter that never
+ * initialized it, and -- worse -- make that interpreter's init cycle skip the
+ * creation, so its own dicts would stay empty and put() would hand
+ * PyDict_SetItemString a null dict. What the backend sets up in
+ * pygame_scrap_init() is process-wide, but no backend gates that on this flag
+ * (both re-establish it on every call), so nothing here needs a second,
+ * process-wide flag to stay correct. */
+PG_CONTEXT_INT(_scrapinitialized)
+#define _scrapinitialized PG_CONTEXT_VAR(_scrapinitialized)
+#else
 static int _scrapinitialized = 0;
+#endif
 
 /**
  * Currently active Clipboard object.
  */
 static ScrapClipType _currentmode;
 #ifdef PG_PER_INTERPRETER_STATE
-/* Dicts created by _scrap_init, which owns the reference kept here and drops
- * the outgoing one before storing a new dict. They hold the data handed to
- * put(), so their contents are objects of the interpreter that called it. */
+/* Borrowed. The dicts are created by _scrap_init and handed to the scrap
+ * module's own dict, which owns them; the names here only point at them. */
 PG_CONTEXT_PTR(PyObject *, _selectiondata)
 #define _selectiondata PG_CONTEXT_VAR(_selectiondata)
 PG_CONTEXT_PTR(PyObject *, _clipdata)
@@ -107,6 +120,57 @@ pygame_scrap_initialized(void)
     return _scrapinitialized;
 }
 
+#ifdef PG_PER_INTERPRETER_STATE
+/*
+ * Creates this interpreter's clipboard dicts and gives the module's own dict
+ * the only reference to each, under a private name. That is what releases
+ * them: they go when the module goes, at the end of the interpreter that
+ * created them. The names above borrow, so nothing has to be released while
+ * the interpreter is alive and the storage hook -- which runs after teardown,
+ * once every object of that interpreter is already gone -- has nothing to do
+ * but free its own wrapper.
+ *
+ * A borrowed name cannot dangle on a live path. The only thing that replaces
+ * either attribute is this function, which rewrites the name in the same
+ * breath; and no entry point below can run once the module dict has been
+ * cleared, because each is reached through a bound method that holds a
+ * reference to the module it is bound to.
+ *
+ * Called before the backend is initialized, so a failure here leaves the flag
+ * clear and the module uninitialized: the entry points below all refuse, and
+ * the next call starts over.
+ */
+static int
+_scrap_init_data(PyObject *module)
+{
+    PyObject *clipdata;
+    PyObject *selectiondata;
+
+    clipdata = PyDict_New();
+    if (!clipdata) {
+        return -1;
+    }
+    selectiondata = PyDict_New();
+    if (!selectiondata) {
+        Py_DECREF(clipdata);
+        return -1;
+    }
+
+    if (PyModule_AddObjectRef(module, "_clipdata", clipdata) < 0 ||
+        PyModule_AddObjectRef(module, "_selectiondata", selectiondata) < 0) {
+        Py_DECREF(clipdata);
+        Py_DECREF(selectiondata);
+        return -1;
+    }
+
+    _clipdata = clipdata;
+    _selectiondata = selectiondata;
+    Py_DECREF(clipdata);
+    Py_DECREF(selectiondata);
+    return 0;
+}
+#endif /* PG_PER_INTERPRETER_STATE */
+
 /*
  * Initializes the pygame scrap module.
  */
@@ -121,10 +185,16 @@ _scrap_init(PyObject *self, PyObject *args)
     }
 
     if (!pygame_scrap_initialized()) {
+#ifdef PG_PER_INTERPRETER_STATE
+        if (_scrap_init_data(self) < 0) {
+            return NULL;
+        }
+#else
         Py_XDECREF(_clipdata);
         Py_XDECREF(_selectiondata);
         _clipdata = PyDict_New();
         _selectiondata = PyDict_New();
+#endif
     }
 
     /* In case we've got not video surface, we won't initialize

@@ -24,7 +24,7 @@
 #define PGCONTEXT_H
 
 /*
- * Per-interpreter storage for module-level object pointers.
+ * Per-interpreter storage for module-level state.
  *
  * Compiled only when PG_PER_INTERPRETER_STATE is defined, which no ordinary
  * build defines (`meson setup -Dper_interpreter_state=true` is the switch).
@@ -35,11 +35,17 @@
  * interpreter is finalized every later read of the shared static dereferences
  * an object that no longer exists.
  *
- * PG_CONTEXT_PTR(type, name) declares the storage for one such pointer and
- * PG_CONTEXT_VAR(name) reads and writes it, so call sites keep spelling the
- * name exactly as upstream does. Each declaration is paired with an #else
+ * PG_CONTEXT_PTR(type, name) declares the storage for one such pointer,
+ * PG_CONTEXT_INT(name) for a flag that gates per-interpreter state, and
+ * PG_CONTEXT_VAR(name) reads and writes either, so call sites keep spelling
+ * the name exactly as upstream does. Each declaration is paired with an #else
  * branch that keeps the upstream static verbatim, so a build without the
  * define is byte-for-byte the upstream one.
+ *
+ * A flag is worth converting only when what it gates is per-interpreter. One
+ * that guards process-wide setup must stay process-wide, or that setup is
+ * repeated; one that guards per-interpreter state must not, or every
+ * interpreter after the first skips its own setup and is left with none.
  *
  * Ownership is NOT moved into the slot. The slot stores the pointer; whoever
  * owned the reference upstream still owns it and still drops it in the same
@@ -58,7 +64,8 @@
 #ifdef PG_PER_INTERPRETER_STATE
 
 #if defined(BUILD_STATIC)
-#error "PG_PER_INTERPRETER_STATE cannot be combined with BUILD_STATIC: the \
+#error \
+    "PG_PER_INTERPRETER_STATE cannot be combined with BUILD_STATIC: the \
 static build gives these names external linkage and resolves them from other \
 translation units, which an accessor macro cannot provide."
 #endif
@@ -91,29 +98,32 @@ translation units, which an accessor macro cannot provide."
  */
 #include "pgcontext_host.h"
 
-#define PG_CONTEXT_PTR(type, name)                                       \
-    static void *pg_context_create_##name(void)                          \
-    {                                                                    \
-        type *slot = (type *)malloc(sizeof(type));                       \
-        if (slot) {                                                      \
-            *slot = NULL;                                                \
-        }                                                                \
-        return slot;                                                     \
-    }                                                                    \
-                                                                         \
-    static void pg_context_free_##name(void *ptr)                        \
-    {                                                                    \
-        /* The C wrapper only. Never release the object the slot         \
-         * pointed at from here -- see the ownership note above. */      \
-        free(ptr);                                                       \
-    }                                                                    \
-                                                                         \
-    static type *pg_context_slot_##name(void)                            \
-    {                                                                    \
-        return (type *)pg_host_get_context_slot(                         \
-            "pygame_" #name, __FILE_NAME__, __LINE__,                    \
-            pg_context_create_##name, pg_context_free_##name, NULL);     \
+#define PG_CONTEXT_STORAGE(type, name, empty)                        \
+    static void *pg_context_create_##name(void)                      \
+    {                                                                \
+        type *slot = (type *)malloc(sizeof(type));                   \
+        if (slot) {                                                  \
+            *slot = empty;                                           \
+        }                                                            \
+        return slot;                                                 \
+    }                                                                \
+                                                                     \
+    static void pg_context_free_##name(void *ptr)                    \
+    {                                                                \
+        /* The C wrapper only. Never release the object the slot     \
+         * pointed at from here -- see the ownership note above. */  \
+        free(ptr);                                                   \
+    }                                                                \
+                                                                     \
+    static type *pg_context_slot_##name(void)                        \
+    {                                                                \
+        return (type *)pg_host_get_context_slot(                     \
+            "pygame_" #name, __FILE_NAME__, __LINE__,                \
+            pg_context_create_##name, pg_context_free_##name, NULL); \
     }
+
+#define PG_CONTEXT_PTR(type, name) PG_CONTEXT_STORAGE(type, name, NULL)
+#define PG_CONTEXT_INT(name) PG_CONTEXT_STORAGE(int, name, 0)
 
 #define PG_CONTEXT_VAR(name) (*pg_context_slot_##name())
 
