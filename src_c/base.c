@@ -2243,6 +2243,19 @@ MODINIT_DEFINE(base)
                                          NULL};
 
     PyObject *module, *apiobj;
+    /* The two exceptions are held here for as long as this run owns them,
+     * and the names below take them only once something else does. The error
+     * label then releases what this run created and nothing else.
+     *
+     * Reaching for the names there instead is wrong once the name can
+     * outlive a run: after a successful init cycle it is borrowing, so a
+     * second cycle in the same interpreter that fails before replacing it --
+     * a failed re-import, an interpreter reinitialising the module -- drops
+     * a reference the name does not hold. Both names survive their cycle,
+     * one per interpreter or one per process depending on the build, and
+     * every early exit below happens before this run has anything of its own
+     * to release. */
+    PyObject *exc_sdl = NULL, *exc_buffer = NULL;
 
     /* create the module */
     module = PyModule_Create(&_module);
@@ -2256,19 +2269,30 @@ MODINIT_DEFINE(base)
 #endif
 
     /* create the exceptions */
-    pgExc_SDLError =
-        PyErr_NewException("pygame.error", PyExc_RuntimeError, NULL);
-    if (PyModule_AddObject(module, "error", pgExc_SDLError)) {
-        Py_XDECREF(pgExc_SDLError);
+    exc_sdl = PyErr_NewException("pygame.error", PyExc_RuntimeError, NULL);
+    if (!exc_sdl) {
         goto error;
     }
+    /* Steals the reference, and only when it succeeds. */
+    if (PyModule_AddObject(module, "error", exc_sdl)) {
+        goto error;
+    }
+    /* The module dict owns it now, so the name is borrowing from here. */
+    pgExc_SDLError = exc_sdl;
+    exc_sdl = NULL;
 
-    pgExc_BufferError =
+    exc_buffer =
         PyErr_NewException("pygame.BufferError", PyExc_BufferError, NULL);
-    /* Because we need a reference to BufferError in the base module */
-    if (PyModule_AddObjectRef(module, "BufferError", pgExc_BufferError)) {
+    if (!exc_buffer) {
         goto error;
     }
+    /* Because we need a reference to BufferError in the base module */
+    if (PyModule_AddObjectRef(module, "BufferError", exc_buffer)) {
+        goto error;
+    }
+    /* Takes a reference of its own, so this run still holds one and the
+     * error label is still the thing that releases it. */
+    pgExc_BufferError = exc_buffer;
 
     /* export the c api */
 #ifdef PG_PER_INTERPRETER_STATE
@@ -2378,13 +2402,16 @@ MODINIT_DEFINE(base)
      * copy but strands one exception object -- and every object it keeps
      * alive -- per interpreter that runs this init cycle. The drop is last on
      * the success path so that every error exit above still owns what it
-     * releases. */
-    Py_DECREF(pgExc_BufferError);
+     * releases; clearing rather than dropping keeps that true of this line
+     * too. Without the define the reference stays where upstream leaves it,
+     * held for the life of the process by the name it was just given to. */
+    Py_CLEAR(exc_buffer);
 #endif
     return module;
 
 error:
-    Py_XDECREF(pgExc_BufferError);
+    Py_XDECREF(exc_buffer);
+    Py_XDECREF(exc_sdl);
     Py_XDECREF(module);
     return NULL;
 }
