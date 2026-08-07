@@ -84,6 +84,14 @@ if sdl_api == 3
     add_global_arguments('-DPG_SDL3=1', '-DSDL_ENABLE_OLD_NAMES=1', language: 'c')
 endif
 
+if get_option('per_interpreter_state')
+    # The storage API belongs to the embedding runtime, so this build cannot
+    # probe for its header here: the prefix that carries it is only assembled
+    # further down. A missing header fails the first compile by name, which is
+    # unambiguous enough. See src_c/pgcontext.h.
+    add_global_arguments('-DPG_PER_INTERPRETER_STATE=1', language: 'c')
+endif
+
 pg_inc_dirs = []
 pg_lib_dirs = []
 

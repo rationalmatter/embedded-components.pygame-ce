@@ -49,3 +49,11 @@ option('emscripten_type', type: 'combo', choices: ['pyodide', 'pygbag'])
 # is the only prefix searched, since the build machine's prefixes describe the
 # wrong target. Empty by default, which leaves native builds unchanged.
 option('deps_prefix', type: 'string', value: '')
+
+# Store the modules' file-scope object references in per-interpreter slots
+# instead of process-wide statics. Only useful to an embedding runtime that
+# creates several interpreters in one process and runs each module's init
+# cycle once per interpreter; it requires a small host-supplied header
+# (pgcontext_host.h, see src_c/pgcontext.h) on the include path. Off by
+# default, which leaves every ordinary build unchanged.
+option('per_interpreter_state', type: 'boolean', value: false)

@@ -55,10 +55,16 @@ typedef struct pg_view_internals_s {
 } pgViewInternals;
 
 extern PG_PixelFormatEnum pg_default_convert_format;
+/* The three names bracketed below become per-interpreter accessors declared
+ * in base.c under PG_PER_INTERPRETER_STATE; see pgcontext.h. */
+#ifndef PG_PER_INTERPRETER_STATE
 extern PyObject *pgExc_BufferError;
 extern PyObject *pgExc_SDLError;
+#endif
 extern SDL_Window *pg_default_window;
+#ifndef PG_PER_INTERPRETER_STATE
 extern pgSurfaceObject *pg_default_screen;
+#endif
 
 void
 pg_install_parachute(void);

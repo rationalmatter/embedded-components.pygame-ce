@@ -45,6 +45,8 @@
 
 #include "pgcompat.h"
 
+#include "pgcontext.h"
+
 #include <ctype.h>
 
 static inline double
@@ -60,7 +62,16 @@ pg_round(double d)
 
 typedef enum { TRISTATE_SUCCESS, TRISTATE_FAIL, TRISTATE_ERROR } tristate;
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Reference taken by PyObject_GetAttrString in the init cycle and kept here;
+ * PyModule_AddObjectRef adds the module's own on top. Dropped only on the
+ * init-cycle error path, so on the success path this reference lives until
+ * the interpreter that created it is finalized. */
+PG_CONTEXT_PTR(PyObject *, _COLORDICT)
+#define _COLORDICT PG_CONTEXT_VAR(_COLORDICT)
+#else
 static PyObject *_COLORDICT = NULL;
+#endif
 
 static int
 _get_double(PyObject *, double *);

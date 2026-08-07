@@ -29,6 +29,8 @@
 
 #include "pgcompat.h"
 
+#include "pgcontext.h"
+
 #include "doc/pygame_doc.h"
 
 typedef struct {
@@ -44,7 +46,15 @@ typedef struct {
 static const char pg_default_encoding[] = "unicode_escape";
 static const char pg_default_errors[] = "backslashreplace";
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Reference taken by PyImport_ImportModule at the end of the init cycle and
+ * held for the module's lifetime; nothing on the live path releases it, so it
+ * is reclaimed when the interpreter that imported it is finalized. */
+PG_CONTEXT_PTR(PyObject *, os_module)
+#define os_module PG_CONTEXT_VAR(os_module)
+#else
 static PyObject *os_module = NULL;
+#endif
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 static Sint64

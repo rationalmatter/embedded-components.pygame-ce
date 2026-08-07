@@ -27,6 +27,9 @@
 
 #include "doc/joystick_doc.h"
 
+/* Head of a list of live joystick objects, so it needs the pgcontext.h
+ * per-interpreter treatment; convert it when this module is built in a
+ * per-interpreter configuration. */
 static pgJoystickObject *joylist_head = NULL;
 static PyTypeObject pgJoystick_Type;
 static PyObject *

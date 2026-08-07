@@ -33,18 +33,50 @@
 
 #include "base.h"
 
+#include "pgcontext.h"
+
 PG_PixelFormatEnum pg_default_convert_format = 0;
 
 /* Custom exceptions */
+#ifdef PG_PER_INTERPRETER_STATE
+/* Reference created by PyErr_NewException in the init cycle and kept here;
+ * PyModule_AddObjectRef adds the module's own on top. Dropped only on the
+ * init-cycle error path, so on the success path this reference lives until
+ * the interpreter that created it is finalized. */
+PG_CONTEXT_PTR(PyObject *, pgExc_BufferError)
+#define pgExc_BufferError PG_CONTEXT_VAR(pgExc_BufferError)
+/* Reference created by PyErr_NewException in the init cycle and handed
+ * straight to the module dict, which PyModule_AddObject steals. The value
+ * kept here is borrowed from `pygame.base.error` from that point on; the
+ * init-cycle error path drops the reference the module never took. */
+PG_CONTEXT_PTR(PyObject *, pgExc_SDLError)
+#define pgExc_SDLError PG_CONTEXT_VAR(pgExc_SDLError)
+#else
 PyObject *pgExc_BufferError = NULL;
 PyObject *pgExc_SDLError = NULL;
+#endif
 
 /* Only one instance of the state per process. */
+#ifdef PG_PER_INTERPRETER_STATE
+/* List created on demand by pg_RegisterQuit / pg_register_quit and released
+ * by _pg_quit, which moves it out of the slot before draining it. */
+PG_CONTEXT_PTR(PyObject *, pg_quit_functions)
+#define pg_quit_functions PG_CONTEXT_VAR(pg_quit_functions)
+#else
 static PyObject *pg_quit_functions = NULL;
+#endif
 static int pg_is_init = 0;
 static bool pg_sdl_was_init = 0;
 SDL_Window *pg_default_window = NULL;
+#ifdef PG_PER_INTERPRETER_STATE
+/* Strong reference taken and dropped by pg_SetDefaultWindowSurface, which
+ * Py_XDECREFs the outgoing value; pg_display_quit drives the release by
+ * calling it with NULL. */
+PG_CONTEXT_PTR(pgSurfaceObject *, pg_default_screen)
+#define pg_default_screen PG_CONTEXT_VAR(pg_default_screen)
+#else
 pgSurfaceObject *pg_default_screen = NULL;
+#endif
 static int pg_env_blend_alpha_SDL2 = 0;
 
 /* compare compiled to linked, raise python error on incompatibility */
