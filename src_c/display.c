@@ -65,6 +65,15 @@ typedef struct _display_state_s {
 static int
 pg_flip_internal(_DisplayState *state);
 
+/* Defined further down, declared here because display quit and the module's
+ * free hook both take this watch back down. */
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+static bool
+#else
+static int SDLCALL
+#endif
+pg_ResizeEventWatch(void *userdata, SDL_Event *event);
+
 #ifndef PYPY_VERSION
 static struct PyModuleDef _module;
 #define DISPLAY_MOD_STATE(mod) ((_DisplayState *)PyModule_GetState(mod))
@@ -219,6 +228,12 @@ pg_display_quit(PyObject *self, PyObject *_null)
         SDL_DestroyRenderer(pg_renderer);
         pg_renderer = NULL;
     }
+
+    /* Symmetric with the two places that already remove this watch, and for
+     * the same reason the release above is here: the watch reads the
+     * renderer and this module's state, and window events keep arriving
+     * while the window is being torn down. */
+    SDL_DelEventWatch(pg_ResizeEventWatch, self);
 
     _display_state_cleanup(state);
     if (pg_GetDefaultWindowSurface()) {
@@ -3938,6 +3953,36 @@ static PyMethodDef _pg_display_methods[] = {
      DOC_DISPLAY_MESSAGEBOX},
     {NULL, NULL, 0, NULL}};
 
+/*
+ * The resize watch is registered process-wide, but it is keyed on this
+ * module object: SDL matches a watch on the (callback, userdata) pair, so
+ * every interpreter that registers one owns a distinct entry and none of
+ * them can remove another's. The three removal sites -- set_mode, the
+ * autoresize setter and quit -- all run only when Python asks, so an
+ * interpreter that is finalized without quitting leaves its entry behind,
+ * pointing at a module object that is about to be freed. The callback
+ * dereferences that pointer for its state before it filters on the window,
+ * so any window event delivered afterwards walks freed memory.
+ *
+ * Tying the removal to the module object's own lifetime is what closes
+ * that, because the object is the thing whose lifetime the entry depends
+ * on. Module deallocation runs m_free -- and not m_clear -- while the
+ * object is still valid, which is precisely the last moment the userdata
+ * this entry was keyed on is still good. Nothing here touches Python state,
+ * so it is safe at that point in finalization.
+ *
+ * Worth stating because it inverts the usual reading: an interpreter that
+ * *leaks* is not the dangerous case. Its module object is never freed, so
+ * the entry keeps pointing at live memory and the watch merely goes quiet
+ * once the window filter stops matching. The dangerous case is
+ * finalization succeeding, and that is exactly the case this covers.
+ */
+static void
+_display_module_free(void *mod)
+{
+    SDL_DelEventWatch(pg_ResizeEventWatch, mod);
+}
+
 #ifndef PYPY_VERSION
 static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                      "display",
@@ -3948,12 +3993,12 @@ static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                      NULL,
                                      NULL,
                                      NULL,
-                                     NULL};
+                                     _display_module_free};
 #else  /* PYPY_VERSION */
 static struct PyModuleDef _module = {
     PyModuleDef_HEAD_INIT, "display", DOC_DISPLAY, -1, /* PyModule_GetState()
                                                           not implemented */
-    _pg_display_methods,   NULL,      NULL,        NULL, NULL};
+    _pg_display_methods,   NULL,      NULL,        NULL, _display_module_free};
 #endif /* PYPY_VERSION */
 
 MODINIT_DEFINE(display)
