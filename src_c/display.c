@@ -1757,18 +1757,37 @@ pg_set_mode(PyObject *self, PyObject *arg, PyObject *kwds)
                  * resize/bordered/hidden changes due to SDL ignoring those
                  * changes if the window is fullscreen
                  * See https://github.com/pygame/pygame/issues/2711 */
+                /* The only two failures this branch reports, and both go
+                 * through the window teardown rather than returning here.
+                 * Returning leaves the default window installed, and the
+                 * window this branch works on is by definition the default
+                 * one -- so the same call fails the same way next time, and
+                 * every time after that, with nothing short of a display
+                 * quit to clear it. The teardown gives the window back, which
+                 * costs the caller a window it has just been told it cannot
+                 * have and leaves the next set_mode free to open a new one.
+                 * The exception is unchanged: it is raised from SDL's error
+                 * before anything else can overwrite it, and the teardown
+                 * itself raises nothing. The state cleanup that goes with it
+                 * is what every other exit to that label does, and matters
+                 * here because a GL context from an earlier set_mode is
+                 * bound to the window about to be destroyed. */
 #if SDL_VERSION_ATLEAST(3, 0, 0)
                 if (!PG_SetWindowFullscreen(win,
                                             sdl_flags & SDL_WINDOW_FULLSCREEN,
                                             non_desktop_fullscreen)) {
-                    return RAISE(pgExc_SDLError, SDL_GetError());
+                    PyErr_SetString(pgExc_SDLError, SDL_GetError());
+                    _display_state_cleanup(state);
+                    goto DESTROY_WINDOW;
                 }
 #else
                 if (0 !=
                     SDL_SetWindowFullscreen(
                         win, sdl_flags & (SDL_WINDOW_FULLSCREEN |
                                           SDL_WINDOW_FULLSCREEN_DESKTOP))) {
-                    return RAISE(pgExc_SDLError, SDL_GetError());
+                    PyErr_SetString(pgExc_SDLError, SDL_GetError());
+                    _display_state_cleanup(state);
+                    goto DESTROY_WINDOW;
                 }
 #endif
 
