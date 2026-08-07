@@ -34,6 +34,8 @@
 
 #include "pgcompat.h"
 
+#include "pgcontext.h"
+
 #include "doc/scrap_doc.h"
 
 #include "scrap.h"
@@ -47,8 +49,18 @@ static int _scrapinitialized = 0;
  * Currently active Clipboard object.
  */
 static ScrapClipType _currentmode;
+#ifdef PG_PER_INTERPRETER_STATE
+/* Dicts created by _scrap_init, which owns the reference kept here and drops
+ * the outgoing one before storing a new dict. They hold the data handed to
+ * put(), so their contents are objects of the interpreter that called it. */
+PG_CONTEXT_PTR(PyObject *, _selectiondata)
+#define _selectiondata PG_CONTEXT_VAR(_selectiondata)
+PG_CONTEXT_PTR(PyObject *, _clipdata)
+#define _clipdata PG_CONTEXT_VAR(_clipdata)
+#else
 static PyObject *_selectiondata = NULL;
 static PyObject *_clipdata = NULL;
+#endif
 
 /* Forward declarations. */
 static PyObject *

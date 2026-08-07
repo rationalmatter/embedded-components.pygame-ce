@@ -27,9 +27,11 @@
 
 #include "doc/joystick_doc.h"
 
-/* Head of a list of live joystick objects, so it needs the pgcontext.h
- * per-interpreter treatment; convert it when this module is built in a
- * per-interpreter configuration. */
+/* Process-global; the entries are objects owned by whichever interpreter
+ * created them, so this list must move to pgcontext.h per-interpreter storage
+ * if a joystick backend is ever enabled. It is left alone here because a
+ * build whose SDL carries no joystick support can never populate it, which
+ * makes the conversion unverifiable. */
 static pgJoystickObject *joylist_head = NULL;
 static PyTypeObject pgJoystick_Type;
 static PyObject *

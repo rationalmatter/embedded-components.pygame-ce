@@ -45,11 +45,12 @@ SaveTGA_RW(SDL_Surface *surface, SDL_RWops *out, int rle);
     ((flipped) ? (((char *)data) + (height - row - 1) * width) \
                : (((char *)data) + row * width))
 
-/* These five hold bound methods of the imageext module and are only ever
- * populated when that module is built (the `image` feature option). They need
- * the pgcontext.h per-interpreter treatment the same way base.c's and
- * color.c's module-level references do; convert them when the option is
- * enabled in a per-interpreter configuration. */
+/* Process-global; these five hold bound methods of the imageext module, which
+ * are objects owned by whichever interpreter imported it, so they must move to
+ * pgcontext.h per-interpreter storage the same way base.c's and color.c's
+ * module-level references did. They are left alone here because a build with
+ * the `image` feature option off never builds imageext and so can never
+ * populate them, which makes the conversion unverifiable. */
 static PyObject *extloadobj = NULL;
 static PyObject *extsaveobj = NULL;
 static PyObject *extverobj = NULL;

@@ -2,6 +2,8 @@
 
 #include "pgcompat.h"
 
+#include "pgcontext.h"
+
 #include "doc/system_doc.h"
 
 static PyObject *
@@ -181,7 +183,16 @@ error:
     return NULL;
 }
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Class fetched from pygame._data_classes in the init cycle and handed
+ * straight to the module dict, which PyModule_AddObject steals. The value
+ * kept here is borrowed from `pygame.system.PowerState` from that point on;
+ * the init-cycle error path drops the reference the module never took. */
+PG_CONTEXT_PTR(PyObject *, PowerState_class)
+#define PowerState_class PG_CONTEXT_VAR(PowerState_class)
+#else
 static PyObject *PowerState_class = NULL;
+#endif
 
 static PyObject *
 pg_system_get_power_state(PyObject *self, PyObject *_null)
