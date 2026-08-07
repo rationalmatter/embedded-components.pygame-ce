@@ -2161,7 +2161,15 @@ static PyMethodDef _base_methods[] = {
 #endif
     {NULL, NULL, 0, NULL}};
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* The table the capsule below publishes. Per interpreter, so the capsule an
+ * init cycle hands out addresses the table that same cycle filled in, and the
+ * entries an interpreter wrote go away with it rather than with whichever
+ * interpreter happened to run its init cycle last. */
+PG_CONTEXT_API_TABLE(base, PYGAMEAPI_BASE_NUMSLOTS)
+#else
 static void *c_api[PYGAMEAPI_BASE_NUMSLOTS];
+#endif
 
 MODINIT_DEFINE(base)
 {
@@ -2176,6 +2184,9 @@ MODINIT_DEFINE(base)
                                          NULL};
 
     PyObject *module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(base);
+#endif
 
     /* create the module */
     module = PyModule_Create(&_module);

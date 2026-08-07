@@ -2517,10 +2517,19 @@ pg_MappedColorFromObj(PyObject *val, SDL_Surface *surf, Uint32 *color,
 /*DOC*/ static char _color_doc[] =
     /*DOC*/ "color module for pygame";
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(color, PYGAMEAPI_COLOR_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(color)
 {
     PyObject *module = NULL, *colordict_module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(color);
+#else
     static void *c_api[PYGAMEAPI_COLOR_NUMSLOTS];
+#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "color",

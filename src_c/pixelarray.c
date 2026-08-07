@@ -1894,11 +1894,20 @@ pgPixelArray_New(PyObject *surfobj)
         stride0, stride1);
 }
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(pixelarray, PYGAMEAPI_PIXELARRAY_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(pixelarray)
 {
     PyObject *module;
     PyObject *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(pixelarray);
+#else
     static void *c_api[PYGAMEAPI_PIXELARRAY_NUMSLOTS];
+#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "pixelarray",

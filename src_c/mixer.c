@@ -2136,6 +2136,17 @@ MODINIT_DEFINE(mixer)
 #endif
 {
     PyObject *module, *apiobj, *music = NULL;
+    /* Process-global; this is the table the capsule below publishes, so with
+     * several interpreters every init cycle overwrites the entries the
+     * previous one exported and each consumer ends up reading whichever
+     * interpreter imported last -- including after that interpreter is gone.
+     * It must move to pgcontext.h per-interpreter storage
+     * (PG_CONTEXT_API_TABLE, exactly as the built modules did) if the `mixer`
+     * feature option is ever enabled. It is left alone here because a build
+     * with that option off never builds this module, which makes the
+     * conversion unverifiable. The importing half of this module's own C-API
+     * use needs nothing: it is macro-level in pgimport.h and already
+     * converted. */
     static void *c_api[PYGAMEAPI_MIXER_NUMSLOTS];
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,

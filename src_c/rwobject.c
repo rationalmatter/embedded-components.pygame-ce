@@ -896,10 +896,19 @@ static PyMethodDef _pg_rwobject_methods[] = {
 /*DOC*/ static char _pg_rwobject_doc[] =
     /*DOC*/ "SDL_RWops support";
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(rwobject, PYGAMEAPI_RWOBJECT_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(rwobject)
 {
     PyObject *module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(rwobject);
+#else
     static void *c_api[PYGAMEAPI_RWOBJECT_NUMSLOTS];
+#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "rwobject",

@@ -2634,10 +2634,19 @@ static PyMethodDef _event_methods[] = {
 
     {NULL, NULL, 0, NULL}};
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(event, PYGAMEAPI_EVENT_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(event)
 {
     PyObject *module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(event);
+#else
     static void *c_api[PYGAMEAPI_EVENT_NUMSLOTS];
+#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "event",

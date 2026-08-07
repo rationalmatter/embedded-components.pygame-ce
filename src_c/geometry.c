@@ -4,10 +4,19 @@
 
 static PyMethodDef geometry_methods[] = {{NULL, NULL, 0, NULL}};
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(geometry, PYGAMEAPI_GEOMETRY_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(geometry)
 {
     PyObject *module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(geometry);
+#else
     static void *c_api[PYGAMEAPI_GEOMETRY_NUMSLOTS];
+#endif
 
     static struct PyModuleDef _module = {
         .m_base = PyModuleDef_HEAD_INIT,

@@ -570,10 +570,19 @@ pgBufferProxy_Trip(PyObject *obj)
 
 /*DOC*/ static char bufferproxy_doc[] = DOC_BUFFERPROXY;
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(bufferproxy, PYGAMEAPI_BUFFERPROXY_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(bufferproxy)
 {
     PyObject *module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(bufferproxy);
+#else
     static void *c_api[PYGAMEAPI_BUFFERPROXY_NUMSLOTS];
+#endif
 
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "bufferproxy",

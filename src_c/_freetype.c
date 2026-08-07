@@ -2343,10 +2343,19 @@ struct PyModuleDef _freetypemodule = {
     0};
 #endif /* PYPY_VERSION */
 
+#ifdef PG_PER_INTERPRETER_STATE
+/* Per interpreter, so this cycle's capsule addresses this cycle's table. */
+PG_CONTEXT_API_TABLE(_freetype, PYGAMEAPI_FREETYPE_NUMSLOTS)
+#endif
+
 MODINIT_DEFINE(_freetype)
 {
     PyObject *module, *apiobj;
+#ifdef PG_PER_INTERPRETER_STATE
+    void **c_api = PG_CONTEXT_API_TABLE_VAR(_freetype);
+#else
     static void *c_api[PYGAMEAPI_FREETYPE_NUMSLOTS];
+#endif
 
     import_pygame_base();
     if (PyErr_Occurred()) {
