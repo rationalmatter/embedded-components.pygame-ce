@@ -187,6 +187,39 @@ static PyObject *
 pg_display_quit(PyObject *self, PyObject *_null)
 {
     _DisplayState *state = DISPLAY_STATE;
+
+    /* The renderer and its texture belong to the process-wide default
+     * window rather than to any one interpreter -- this file keeps them in
+     * file-scope statics, and the extension is loaded once per process --
+     * and nothing reset them here, so both outlived the video session that
+     * created them. The window teardown below frees them out from under
+     * those pointers without clearing either: destroying a window frees
+     * every texture its renderer owns but deliberately leaves the renderer
+     * struct allocated, so afterwards pg_texture addresses freed memory and
+     * pg_renderer a destroyed object, both still non-NULL. The next
+     * set_mode then destroys a freed texture, and so does the resize watch
+     * below, which is registered process-wide and needs no set_mode to
+     * fire.
+     *
+     * This must run BEFORE the window goes away, which is why it is the
+     * first thing the function does rather than part of the teardown
+     * further down. There are two statements that take the window away --
+     * pg_SetDefaultWindow(NULL) destroys the default window outright, and
+     * SDL_QuitSubSystem destroys whatever is left -- and placed after
+     * either of them these destroy calls would themselves be the
+     * use-after-free they exist to prevent. Texture before renderer, in the
+     * shape pg_set_mode already uses when it releases the pair before
+     * replacing the window. */
+    if (pg_texture) {
+        SDL_DestroyTexture(pg_texture);
+        pg_texture = NULL;
+    }
+
+    if (pg_renderer) {
+        SDL_DestroyRenderer(pg_renderer);
+        pg_renderer = NULL;
+    }
+
     _display_state_cleanup(state);
     if (pg_GetDefaultWindowSurface()) {
         pgSurface_AsSurface(pg_GetDefaultWindowSurface()) = NULL;
