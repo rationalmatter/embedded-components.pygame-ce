@@ -191,6 +191,51 @@ display_resource_end:
 
 #endif  // BUILD_STATIC
 
+/*
+ * The one part of display quit that belongs to the calling interpreter
+ * alone. Where module-level object references are stored per interpreter,
+ * the default window is a process-wide SDL handle while the surface that
+ * goes with it is a Python object of whichever interpreter called set_mode,
+ * so this gives up that interpreter's Surface and touches nothing else.
+ *
+ * It is deliberately not a free. The SDL surface behind the object belongs
+ * to the shared window and outlives this call; only the Python object's
+ * handle on it goes, which is what makes later use of that Surface raise
+ * the usual quit error instead of reading through a pointer the window may
+ * already have invalidated.
+ *
+ * Exposed below as _release_surface, so that one interpreter can give up
+ * its own Surface without tearing the display down for the others. A
+ * caller in that position must not run quit -- the display is not that
+ * caller's to tear down -- but it still has to drop its Surface, or it
+ * keeps a live object addressing a window that may later be destroyed.
+ * Everything else quit does is process-wide (the window, the convert
+ * format, the module autoquits, the video subsystem) and stays out of
+ * here. Quit itself calls this, so the two cannot drift.
+ *
+ * Without per-interpreter module storage the default surface is a single
+ * process-wide pointer and this is simply the whole process's surface --
+ * which is the same statement, in a configuration that has one interpreter
+ * to be local to.
+ */
+static void
+_display_surface_release(void)
+{
+    pgSurfaceObject *surface = pg_GetDefaultWindowSurface();
+
+    if (surface) {
+        pgSurface_AsSurface(surface) = NULL;
+        pg_SetDefaultWindowSurface(NULL);
+    }
+}
+
+static PyObject *
+pg_display_release_surface(PyObject *self, PyObject *_null)
+{
+    _display_surface_release();
+    Py_RETURN_NONE;
+}
+
 /* init routines */
 static PyObject *
 pg_display_quit(PyObject *self, PyObject *_null)
@@ -236,10 +281,7 @@ pg_display_quit(PyObject *self, PyObject *_null)
     SDL_DelEventWatch(pg_ResizeEventWatch, self);
 
     _display_state_cleanup(state);
-    if (pg_GetDefaultWindowSurface()) {
-        pgSurface_AsSurface(pg_GetDefaultWindowSurface()) = NULL;
-        pg_SetDefaultWindowSurface(NULL);
-    }
+    _display_surface_release();
     /* The default window belongs to the video session being torn down here,
      * so giving it back is not conditional on this interpreter also holding
      * the display surface. Upstream the two are always set and cleared as a
@@ -3877,6 +3919,9 @@ error:
 static PyMethodDef _pg_display_methods[] = {
     {"init", (PyCFunction)pg_display_init, METH_NOARGS, DOC_DISPLAY_INIT},
     {"quit", (PyCFunction)pg_display_quit, METH_NOARGS, DOC_DISPLAY_QUIT},
+    {"_release_surface", (PyCFunction)pg_display_release_surface, METH_NOARGS,
+     "give up this interpreter's display surface without tearing the display "
+     "down; the part of quit that is not process-wide"},
     {"get_init", (PyCFunction)pg_get_init, METH_NOARGS, DOC_DISPLAY_GETINIT},
     {"get_active", (PyCFunction)pg_get_active, METH_NOARGS,
      DOC_DISPLAY_GETACTIVE},
