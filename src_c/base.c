@@ -2197,16 +2197,34 @@ static PyMethodDef _base_methods[] = {
  *
  * Cost is one storage lookup per exception raise, which is not a hot path.
  */
+/*
+ * Both fall back rather than hand back a null, because the caller is
+ * PyErr_SetString and passing it a null type is a segmentation fault on
+ * current CPython, not a catchable error. A slot that has never been written
+ * reads as null, so the two are one missed init cycle apart from that -- and
+ * a crash inside the code that raises pygame's errors is a poor way to learn
+ * an interpreter skipped one.
+ *
+ * The base classes are the fallbacks. pygame.error derives from RuntimeError
+ * and pygame.BufferError from BufferError, so `except RuntimeError` and
+ * `except Exception` keep working exactly as they did; only a consumer
+ * naming pygame's own class stops catching it, which is the most that can be
+ * offered when that class was never created.
+ */
 static PyObject *
 pg_GetSDLErrorType(void)
 {
-    return pgExc_SDLError;
+    PyObject *exc = pgExc_SDLError;
+
+    return exc ? exc : PyExc_RuntimeError;
 }
 
 static PyObject *
 pg_GetBufferErrorType(void)
 {
-    return pgExc_BufferError;
+    PyObject *exc = pgExc_BufferError;
+
+    return exc ? exc : PyExc_BufferError;
 }
 #endif /* PG_PER_INTERPRETER_STATE */
 
