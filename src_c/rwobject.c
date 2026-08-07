@@ -339,7 +339,7 @@ _pg_rw_size(SDL_RWops *context)
         return retval;
     }
 
-    PyGILState_STATE state = PyGILState_Ensure();
+    pgGILState state = pg_gil_ensure();
 
     /* Current file position; need to restore it later.
      */
@@ -390,7 +390,7 @@ end:
      */
     Py_XDECREF(pos);
     Py_XDECREF(tmp);
-    PyGILState_Release(state);
+    pg_gil_release(state);
     return retval;
 }
 
@@ -414,7 +414,7 @@ _pg_rw_write(SDL_RWops *context, const void *ptr, size_t size, size_t num)
         return -1;
     }
 
-    PyGILState_STATE state = PyGILState_Ensure();
+    pgGILState state = pg_gil_ensure();
 
     result = PyObject_CallFunction(helper->write, "y#", (const char *)ptr,
                                    (Py_ssize_t)size * num);
@@ -432,7 +432,7 @@ _pg_rw_write(SDL_RWops *context, const void *ptr, size_t size, size_t num)
 #endif
 
 end:
-    PyGILState_Release(state);
+    pg_gil_release(state);
     return retval;
 }
 
@@ -450,7 +450,7 @@ _pg_rw_close(SDL_RWops *context)
     int retval = 0;
 #endif
     PyObject *result;
-    PyGILState_STATE state = PyGILState_Ensure();
+    pgGILState state = pg_gil_ensure();
 
     if (helper->close) {
         result = PyObject_CallNoArgs(helper->close);
@@ -472,7 +472,7 @@ _pg_rw_close(SDL_RWops *context)
     Py_XDECREF(helper->close);
 
     PyMem_Free(helper);
-    PyGILState_Release(state);
+    pg_gil_release(state);
 #if !SDL_VERSION_ATLEAST(3, 0, 0)
     SDL_FreeRW(context);
 #endif
@@ -568,7 +568,7 @@ _pg_rw_seek(SDL_RWops *context, Sint64 offset, int whence)
         return -1;
     }
 
-    PyGILState_STATE state = PyGILState_Ensure();
+    pgGILState state = pg_gil_ensure();
 
     if (!(offset == 0 &&
           whence == SEEK_CUR)) /* being seek'd, not just tell'd */
@@ -598,7 +598,7 @@ _pg_rw_seek(SDL_RWops *context, Sint64 offset, int whence)
     Py_DECREF(result);
 
 end:
-    PyGILState_Release(state);
+    pg_gil_release(state);
 
     return retval;
 }
@@ -622,7 +622,7 @@ _pg_rw_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
         return -1;
     }
 
-    PyGILState_STATE state = PyGILState_Ensure();
+    pgGILState state = pg_gil_ensure();
     result = PyObject_CallFunction(helper->read, "K",
                                    (unsigned long long)size * maxnum);
     if (!result) {
@@ -649,7 +649,7 @@ _pg_rw_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
     Py_DECREF(result);
 
 end:
-    PyGILState_Release(state);
+    pg_gil_release(state);
 
     return retval;
 }

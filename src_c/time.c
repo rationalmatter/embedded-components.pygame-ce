@@ -153,9 +153,9 @@ _pg_timer_free(pgEventTimer *timer)
         SDL_AtomicUnlock(&timer->dict_proxy->lock);
 
         if (is_fully_freed) {
-            PyGILState_STATE gstate = PyGILState_Ensure();
+            pgGILState gstate = pg_gil_ensure();
             Py_DECREF(timer->dict_proxy->dict);
-            PyGILState_Release(gstate);
+            pg_gil_release(gstate);
             free(timer->dict_proxy);
         }
     }
@@ -211,9 +211,9 @@ _pg_add_event_timer(int ev_type, PyObject *ev_dict, int repeat)
             free(new);
             return PG_TIMER_MEMORY_ERROR;
         }
-        PyGILState_STATE gstate = PyGILState_Ensure();
+        pgGILState gstate = pg_gil_ensure();
         Py_INCREF(ev_dict);
-        PyGILState_Release(gstate);
+        pg_gil_release(gstate);
         new->dict_proxy->dict = ev_dict;
         new->dict_proxy->lock = 0;
         new->dict_proxy->num_on_queue = 0;

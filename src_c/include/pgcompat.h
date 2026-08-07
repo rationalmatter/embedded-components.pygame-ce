@@ -3,6 +3,9 @@
 
 #include <Python.h>
 
+/* provides PyThreadState_GetUnchecked() on versions older than 3.13 */
+#include "pythoncapi_compat.h"
+
 /* In CPython, Py_Exit finalises the python interpreter before calling C exit()
  * This does not exist on PyPy, so use exit() directly here */
 #ifdef PYPY_VERSION
@@ -10,6 +13,39 @@
 #else
 #define PG_EXIT(n) Py_Exit(n)
 #endif
+
+/* Helper for the SDL callbacks that need the GIL. Such a callback can be
+ * reached two ways: from an SDL-owned thread, where no thread state is current
+ * and the GIL genuinely has to be acquired, or from a python thread that
+ * already holds it. A thread state being current implies the GIL is held;
+ * PyGILState_Ensure on such a thread can mint a second thread state against
+ * the wrong interpreter in embedded runtimes, so take the gilstate path only
+ * when there is no current thread state. Behaviour on a thread without one --
+ * the SDL threads these callbacks were written for -- is unchanged. */
+typedef struct {
+    PyGILState_STATE gstate;
+    int ensured;
+} pgGILState;
+
+static inline pgGILState
+pg_gil_ensure(void)
+{
+    pgGILState state = {PyGILState_UNLOCKED, 0};
+
+    if (PyThreadState_GetUnchecked() == NULL) {
+        state.gstate = PyGILState_Ensure();
+        state.ensured = 1;
+    }
+    return state;
+}
+
+static inline void
+pg_gil_release(pgGILState state)
+{
+    if (state.ensured) {
+        PyGILState_Release(state.gstate);
+    }
+}
 
 /* define common types where SDL is not included */
 #ifndef SDL_VERSION_ATLEAST
