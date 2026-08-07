@@ -193,6 +193,13 @@ pg_display_quit(PyObject *self, PyObject *_null)
         pg_SetDefaultWindowSurface(NULL);
         pg_SetDefaultWindow(NULL);
     }
+    /* The default convert format belongs to the video session being torn
+     * down here. It is only ever set (by Window.get_surface) when it is 0,
+     * so without this reset the first window of one session leaks its
+     * format to every later init cycle in the process — and
+     * convert()/convert_alpha() then silently use a stale format instead
+     * of raising "No convert format" after a fresh display.init(). */
+    pg_SetDefaultConvertFormat(0);
 
     pg_mod_autoquit(IMPPREFIX "event");
     pg_mod_autoquit(IMPPREFIX "time");
