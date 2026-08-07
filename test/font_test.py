@@ -461,7 +461,7 @@ class FontTypeTest(unittest.TestCase):
 
         self.assertEqual(len(bm), 1)
         if (
-            pygame.font.get_sdl_ttf_version() >= (2, 0, 18)
+            sdl_ttf_version() >= (2, 0, 18)
             and pygame_font.__name__ != "pygame.ftfont"
         ):
             self.assertIsNotNone(bm[0])

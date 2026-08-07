@@ -42,7 +42,14 @@ data_files = files(
     'freesansbold.ttf',
     'pygame_icon.bmp',
 )
-if plat == 'mac'
+# The C sources select this icon under `#if defined(__APPLE__)`
+# (src_c/window.c, src_c/display.c), which is true for every Apple OS —
+# while `plat` is 'mac' only for host_machine.system() == 'darwin'. An iOS
+# cross build (system 'ios' -> plat 'unix') therefore compiled C that asks
+# for a file the install never shipped; display.c clears the failed load,
+# but window.c treats it as fatal, so every Window() raised
+# FileNotFoundError. Match the C predicate, not the build-host name.
+if plat == 'mac' or host_machine.system() == 'ios'
     data_files += 'pygame_icon_mac.bmp'
 endif
 

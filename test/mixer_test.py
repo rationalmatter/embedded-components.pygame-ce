@@ -11,6 +11,13 @@ import pygame
 from pygame import mixer
 from pygame.tests.test_utils import example_path, interactive_test, prompt, question
 
+# On builds without SDL_mixer, pygame.mixer is the MissingModule placeholder:
+# every test body would fail on the first attribute touch and every tearDown's
+# mixer.quit() would error again — 75 noise entries for one cause. Skip the
+# module cleanly instead, the same guard mixer_music_test.py carries.
+if not mixer:
+    raise unittest.SkipTest("mixer module not available (built without SDL_mixer)")
+
 IS_PYPY = "PyPy" == platform.python_implementation()
 
 ################################### CONSTANTS ##################################

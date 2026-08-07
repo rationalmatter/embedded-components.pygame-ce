@@ -1304,11 +1304,14 @@ class ImageModuleTest(unittest.TestCase):
             ("tomato.xcf", (255, 99, 71, 255)),
         ]
 
-        if pygame.image.get_sdl_image_version() > (2, 0, 5):
+        # get_sdl_image_version() is None when SDL_image is absent; treat
+        # that as an old version so the version-gated formats stay excluded.
+        sdl_image_version = pygame.image.get_sdl_image_version() or (0, 0, 0)
+        if sdl_image_version > (2, 0, 5):
             filename_expected_color.append(("purple.qoi", (159, 38, 240, 255)))
 
         # SDL_image 2.8.0 and 2.8.1 have an LBM file loading regression
-        if not (2, 8, 0) <= pygame.image.get_sdl_image_version() < (2, 8, 2):
+        if not (2, 8, 0) <= sdl_image_version < (2, 8, 2):
             filename_expected_color.append(("magenta.lbm", (255, 0, 255, 255)))
 
         for filename, expected_color in filename_expected_color:
