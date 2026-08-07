@@ -117,21 +117,35 @@ image_load_ext(PyObject *self, PyObject *arg, PyObject *kwarg)
     if (ext)
         lock_mutex = !strcasecmp(ext, "gif");
     */
-    Py_BEGIN_ALLOW_THREADS;
+    /* A stream wrapping a Python file object calls that object's methods for
+     * every read, and those calls have to run on the interpreter the object
+     * belongs to. Holding the GIL is what puts them there -- see the contract
+     * above the callbacks in rwobject.c. Any other stream SDL_image reads on
+     * its own, so the GIL is released for it as before. */
+    if (pgRWops_IsFileObject(rw)) {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        surf = IMG_LoadTyped_IO(rw, 1, type);
+#else
+        surf = IMG_LoadTyped_RW(rw, 1, type);
+#endif
+    }
+    else {
+        Py_BEGIN_ALLOW_THREADS;
 
-    /* using multiple threads does not work for (at least) SDL_image
-     * <= 2.0.4
-    SDL_LockMutex(_pg_img_mutex);
-    surf = IMG_LoadTyped_RW(rw, 1, ext);
-    SDL_UnlockMutex(_pg_img_mutex);
-    */
+        /* using multiple threads does not work for (at least) SDL_image
+         * <= 2.0.4
+        SDL_LockMutex(_pg_img_mutex);
+        surf = IMG_LoadTyped_RW(rw, 1, ext);
+        SDL_UnlockMutex(_pg_img_mutex);
+        */
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    surf = IMG_LoadTyped_IO(rw, 1, type);
+        surf = IMG_LoadTyped_IO(rw, 1, type);
 #else
-    surf = IMG_LoadTyped_RW(rw, 1, type);
+        surf = IMG_LoadTyped_RW(rw, 1, type);
 #endif
-    Py_END_ALLOW_THREADS;
+        Py_END_ALLOW_THREADS;
+    }
 #else /* ~WITH_THREAD */
 #if SDL_VERSION_ATLEAST(3, 0, 0)
     surf = IMG_LoadTyped_IO(rw, 1, type);
@@ -202,14 +216,26 @@ imageext_load_sized_svg(PyObject *self, PyObject *arg, PyObject *kwargs)
         return NULL;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+    /* See the note in image_load_ext above: a stream wrapping a Python file
+     * object keeps the GIL so its callbacks run on the owning interpreter. */
+    if (pgRWops_IsFileObject(rw)) {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    surf = IMG_LoadSizedSVG_IO(rw, width, height);
+        surf = IMG_LoadSizedSVG_IO(rw, width, height);
 #else
-    surf = IMG_LoadSizedSVG_RW(rw, width, height);
+        surf = IMG_LoadSizedSVG_RW(rw, width, height);
 #endif
-    SDL_RWclose(rw);
-    Py_END_ALLOW_THREADS;
+        SDL_RWclose(rw);
+    }
+    else {
+        Py_BEGIN_ALLOW_THREADS;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        surf = IMG_LoadSizedSVG_IO(rw, width, height);
+#else
+        surf = IMG_LoadSizedSVG_RW(rw, width, height);
+#endif
+        SDL_RWclose(rw);
+        Py_END_ALLOW_THREADS;
+    }
     if (surf == NULL) {
         return RAISE(pgExc_SDLError, IMG_GetError());
     }
@@ -251,13 +277,24 @@ imageext_load_animation(PyObject *self, PyObject *arg, PyObject *kwargs)
         type = ext;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+    /* See the note in image_load_ext above: a stream wrapping a Python file
+     * object keeps the GIL so its callbacks run on the owning interpreter. */
+    if (pgRWops_IsFileObject(rw)) {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    surfs = IMG_LoadAnimationTyped_IO(rw, 1, type);
+        surfs = IMG_LoadAnimationTyped_IO(rw, 1, type);
 #else
-    surfs = IMG_LoadAnimationTyped_RW(rw, 1, type);
+        surfs = IMG_LoadAnimationTyped_RW(rw, 1, type);
 #endif
-    Py_END_ALLOW_THREADS;
+    }
+    else {
+        Py_BEGIN_ALLOW_THREADS;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        surfs = IMG_LoadAnimationTyped_IO(rw, 1, type);
+#else
+        surfs = IMG_LoadAnimationTyped_RW(rw, 1, type);
+#endif
+        Py_END_ALLOW_THREADS;
+    }
 
     if (ext) {
         free(ext);

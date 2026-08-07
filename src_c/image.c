@@ -92,9 +92,19 @@ image_load_basic(PyObject *self, PyObject *obj)
     if (rw == NULL) {
         return NULL;
     }
-    Py_BEGIN_ALLOW_THREADS;
-    surf = SDL_LoadBMP_RW(rw, 1);
-    Py_END_ALLOW_THREADS;
+    /* A stream wrapping a Python file object calls that object's methods for
+     * every read, and those calls have to run on the interpreter the object
+     * belongs to. Holding the GIL is what puts them there -- see the contract
+     * above the callbacks in rwobject.c. Any other stream SDL reads on its
+     * own, so the GIL is released for it as before. */
+    if (pgRWops_IsFileObject(rw)) {
+        surf = SDL_LoadBMP_RW(rw, 1);
+    }
+    else {
+        Py_BEGIN_ALLOW_THREADS;
+        surf = SDL_LoadBMP_RW(rw, 1);
+        Py_END_ALLOW_THREADS;
+    }
 
     if (surf == NULL) {
         return RAISE(pgExc_SDLError, SDL_GetError());

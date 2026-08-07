@@ -396,13 +396,37 @@ _load_music(PyObject *obj, char *namehint)
         type = ext;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+    /* A stream wrapping a Python file object calls that object's methods for
+     * every read, and those calls have to run on the interpreter the object
+     * belongs to. Holding the GIL is what puts them there -- see the contract
+     * above the callbacks in rwobject.c. Any other stream SDL_mixer reads on
+     * its own, so the GIL is released for it as before.
+     *
+     * Note the stream outlives this call: SDL_mixer keeps it for the music's
+     * whole life and reads from it while playing, off its own audio thread,
+     * which no thread state and no GIL of ours ever reaches. That is a
+     * separate, unfixed hazard on a module this build does not ship; it is
+     * recorded here rather than papered over. */
+    if (pgRWops_IsFileObject(rw)) {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    new_music = Mix_LoadMUSType_IO(rw, _get_type_from_hint(type), SDL_TRUE);
+        new_music =
+            Mix_LoadMUSType_IO(rw, _get_type_from_hint(type), SDL_TRUE);
 #else
-    new_music = Mix_LoadMUSType_RW(rw, _get_type_from_hint(type), SDL_TRUE);
+        new_music =
+            Mix_LoadMUSType_RW(rw, _get_type_from_hint(type), SDL_TRUE);
 #endif
-    Py_END_ALLOW_THREADS;
+    }
+    else {
+        Py_BEGIN_ALLOW_THREADS;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        new_music =
+            Mix_LoadMUSType_IO(rw, _get_type_from_hint(type), SDL_TRUE);
+#else
+        new_music =
+            Mix_LoadMUSType_RW(rw, _get_type_from_hint(type), SDL_TRUE);
+#endif
+        Py_END_ALLOW_THREADS;
+    }
 
     if (ext) {
         free(ext);

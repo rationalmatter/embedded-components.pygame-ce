@@ -1362,14 +1362,33 @@ font_init(PyFontObject *self, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+    /* A stream wrapping a Python file object calls that object's methods for
+     * every read, and those calls have to run on the interpreter the object
+     * belongs to. Holding the GIL is what puts them there -- see the contract
+     * above the callbacks in rwobject.c. Any other stream SDL_ttf reads on its
+     * own, so the GIL is released for it as before.
+     *
+     * Note the stream outlives this call: SDL_ttf keeps it for the font's
+     * whole life and reads from it lazily, and every one of those later reads
+     * already happens with the GIL held. */
+    if (pgRWops_IsFileObject(rw)) {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-    /* TODO: can consider supporting float in python API */
-    font = TTF_OpenFontIO(rw, 1, (float)fontsize);
+        /* TODO: can consider supporting float in python API */
+        font = TTF_OpenFontIO(rw, 1, (float)fontsize);
 #else
-    font = TTF_OpenFontRW(rw, 1, fontsize);
+        font = TTF_OpenFontRW(rw, 1, fontsize);
 #endif
-    Py_END_ALLOW_THREADS;
+    }
+    else {
+        Py_BEGIN_ALLOW_THREADS;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+        /* TODO: can consider supporting float in python API */
+        font = TTF_OpenFontIO(rw, 1, (float)fontsize);
+#else
+        font = TTF_OpenFontRW(rw, 1, fontsize);
+#endif
+        Py_END_ALLOW_THREADS;
+    }
 
     Py_DECREF(obj);
     self->font = font;

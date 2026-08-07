@@ -1964,13 +1964,28 @@ sound_init(PyObject *self, PyObject *arg, PyObject *kwarg)
             }
             return -1;
         }
-        Py_BEGIN_ALLOW_THREADS;
+        /* A stream wrapping a Python file object calls that object's methods
+         * for every read, and those calls have to run on the interpreter the
+         * object belongs to. Holding the GIL is what puts them there -- see
+         * the contract above the callbacks in rwobject.c. Any other stream
+         * SDL_mixer reads on its own, so the GIL is released for it as
+         * before. */
+        if (pgRWops_IsFileObject(rw)) {
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-        chunk = Mix_LoadWAV_IO(rw, 1);
+            chunk = Mix_LoadWAV_IO(rw, 1);
 #else
-        chunk = Mix_LoadWAV_RW(rw, 1);
+            chunk = Mix_LoadWAV_RW(rw, 1);
 #endif
-        Py_END_ALLOW_THREADS;
+        }
+        else {
+            Py_BEGIN_ALLOW_THREADS;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+            chunk = Mix_LoadWAV_IO(rw, 1);
+#else
+            chunk = Mix_LoadWAV_RW(rw, 1);
+#endif
+            Py_END_ALLOW_THREADS;
+        }
         if (chunk == NULL) {
             PyErr_SetString(pgExc_SDLError, SDL_GetError());
             return -1;

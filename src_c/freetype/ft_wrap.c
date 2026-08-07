@@ -376,12 +376,34 @@ _PGFT_BuildScaler(pgFontObject *fontobj, FTC_Scaler scale, Scale_t face_size)
  *  - Loading from rwops, existing files, etc
  *
  *********************************************************/
+/* True when reading this face means calling a Python file object's methods,
+ * which the stream below does through the callbacks in rwobject.c. Those have
+ * to run on the interpreter that owns the object, and holding the GIL is what
+ * puts them there -- see the contract above them. */
+static int
+_PGFT_font_reads_python(pgFontId *id)
+{
+    if (id->open_args.flags != FT_OPEN_STREAM || !id->open_args.stream) {
+        return 0;
+    }
+    return pgRWops_IsFileObject(
+        (SDL_RWops *)id->open_args.stream->descriptor.pointer);
+}
+
+/* The cache calls this whenever it needs the face, which is not only the first
+ * time: the face can be evicted and re-requested later, from whichever call --
+ * and whichever Python thread -- happens to need it next. So the decision has
+ * to be made here, per request, rather than once when the font was built. */
 static FT_Error
 _PGFT_font_request(FTC_FaceID font_id, FT_Library library,
                    FT_Pointer request_data, FT_Face *afont)
 {
     pgFontId *id = (pgFontId *)font_id;
     FT_Error error;
+
+    if (_PGFT_font_reads_python(id)) {
+        return FT_Open_Face(library, &id->open_args, id->font_index, afont);
+    }
 
     Py_BEGIN_ALLOW_THREADS;
     error = FT_Open_Face(library, &id->open_args, id->font_index, afont);
