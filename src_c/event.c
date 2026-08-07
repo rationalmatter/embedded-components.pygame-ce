@@ -799,6 +799,15 @@ pgEvent_AutoQuit(PyObject *self, PyObject *_null)
          * test preventing further tests from getting a custom event type.*/
         _custom_event = _PGE_CUSTOM_EVENT_INIT;
     }
+    /* The pressed/released arrays outlive the module, so without this a later
+     * init cycle starts out reporting the keys and buttons that were down when
+     * this one quit, until the first pumping call clears them. Reset
+     * unconditionally: the init flag is shared state too, and cannot be relied
+     * on to track a single quit. */
+    memset(pressed_keys, 0, sizeof(pressed_keys));
+    memset(released_keys, 0, sizeof(released_keys));
+    memset(pressed_mouse_buttons, 0, sizeof(pressed_mouse_buttons));
+    memset(released_mouse_buttons, 0, sizeof(released_mouse_buttons));
     _pg_event_is_init = 0;
     Py_RETURN_NONE;
 }
