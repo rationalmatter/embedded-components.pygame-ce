@@ -2165,9 +2165,6 @@ static void *c_api[PYGAMEAPI_BASE_NUMSLOTS];
 
 MODINIT_DEFINE(base)
 {
-#if !defined(BUILD_STATIC)
-    PyObject *atexit, *atexit_register;
-#endif
     static struct PyModuleDef _module = {PyModuleDef_HEAD_INIT,
                                          "base",
                                          "",
@@ -2179,23 +2176,6 @@ MODINIT_DEFINE(base)
                                          NULL};
 
     PyObject *module, *apiobj;
-
-    /* import need modules. Do this first so if there is an error
-        the module is not loaded.
-    */
-
-#if !defined(BUILD_STATIC)
-    atexit = PyImport_ImportModule("atexit");
-    if (!atexit) {
-        return NULL;
-    }
-
-    atexit_register = PyObject_GetAttrString(atexit, "register");
-    Py_DECREF(atexit);
-    if (!atexit_register) {
-        return NULL;
-    }
-#endif
 
     /* create the module */
     module = PyModule_Create(&_module);
@@ -2283,26 +2263,25 @@ MODINIT_DEFINE(base)
     }
 
 #if !defined(BUILD_STATIC)
-    /*some initialization*/
-    PyObject *quit = PyObject_GetAttrString(module, "quit");
-    PyObject *rval;
+    /* Upstream also does three things here that an embedding runtime cannot
+       afford, so they are left out:
 
-    if (!quit) { /* assertion */
-        goto error;
-    }
+       - atexit.register(quit). The registration goes into the importing
+         interpreter's own callback list and fires when *that* interpreter is
+         finalised, not at process exit. So an interpreter that did nothing
+         but read pygame.version quits SDL out from under the one that is
+         actually drawing, the moment it goes away. When to shut this module
+         down is the embedder's decision, not this module's.
+       - Py_AtExit(pg_atexit_quit). Its table holds 32 entries for the whole
+         process and this init cycle runs once per interpreter, so it is both
+         a slow leak of that table and a second copy of the hazard above.
+       - pg_install_parachute(). It hands SIGSEGV, SIGBUS, SIGFPE and SIGQUIT
+         to a handler that runs Python -- allocating, taking the GIL and
+         calling back into SDL -- from inside a signal handler. Those signals
+         belong to the embedding application, which may have its own handlers
+         installed and must not have them displaced by an imported library.
 
-    rval = PyObject_CallOneArg(atexit_register, quit);
-    Py_DECREF(atexit_register);
-    Py_DECREF(quit);
-    atexit_register = NULL;
-    if (!rval) {
-        goto error;
-    }
-    Py_DECREF(rval);
-    Py_AtExit(pg_atexit_quit);
-#ifdef HAVE_SIGNAL_H
-    pg_install_parachute();
-#endif
+       pg_CheckSDLVersions() below is upstream's and is deliberately kept. */
 
     /* This must be called before calling any other SDL API */
     if (!pg_CheckSDLVersions()) {
@@ -2332,9 +2311,6 @@ MODINIT_DEFINE(base)
 error:
     Py_XDECREF(pgExc_BufferError);
     Py_XDECREF(module);
-#if !defined(BUILD_STATIC)
-    Py_XDECREF(atexit_register);
-#endif
     return NULL;
 }
 
