@@ -39,10 +39,11 @@ PG_PixelFormatEnum pg_default_convert_format = 0;
 
 /* Custom exceptions */
 #ifdef PG_PER_INTERPRETER_STATE
-/* Reference created by PyErr_NewException in the init cycle and kept here;
- * PyModule_AddObjectRef adds the module's own on top. Dropped only on the
- * init-cycle error path, so on the success path this reference lives until
- * the interpreter that created it is finalized. */
+/* Reference created by PyErr_NewException in the init cycle, after which
+ * PyModule_AddObjectRef gives the module dict one of its own and the init
+ * cycle drops this one. The value kept here is then borrowed from
+ * `pygame.base.BufferError`, as pgExc_SDLError's is from `pygame.base.error`;
+ * the init-cycle error path drops the reference while it is still owned. */
 PG_CONTEXT_PTR(PyObject *, pgExc_BufferError)
 #define pgExc_BufferError PG_CONTEXT_VAR(pgExc_BufferError)
 /* Reference created by PyErr_NewException in the init cycle and handed
@@ -2297,6 +2298,18 @@ MODINIT_DEFINE(base)
 #else   // !BUILD_STATIC
     PyInit_pygame_static();
 #endif  // BUILD_STATIC
+
+#ifdef PG_PER_INTERPRETER_STATE
+    /* The module dict has held a reference of its own since
+     * PyModule_AddObjectRef above, so the one PyErr_NewException returned can
+     * go and the name becomes borrowed, like pygame.error already is. Nothing
+     * else ever released it, which costs nothing for a single process-wide
+     * copy but strands one exception object -- and every object it keeps
+     * alive -- per interpreter that runs this init cycle. The drop is last on
+     * the success path so that every error exit above still owns what it
+     * releases. */
+    Py_DECREF(pgExc_BufferError);
+#endif
     return module;
 
 error:

@@ -63,10 +63,11 @@ pg_round(double d)
 typedef enum { TRISTATE_SUCCESS, TRISTATE_FAIL, TRISTATE_ERROR } tristate;
 
 #ifdef PG_PER_INTERPRETER_STATE
-/* Reference taken by PyObject_GetAttrString in the init cycle and kept here;
- * PyModule_AddObjectRef adds the module's own on top. Dropped only on the
- * init-cycle error path, so on the success path this reference lives until
- * the interpreter that created it is finalized. */
+/* Reference taken by PyObject_GetAttrString in the init cycle, after which
+ * PyModule_AddObjectRef gives the module dict one of its own and the init
+ * cycle drops this one. The value kept here is then borrowed from
+ * `pygame.color.THECOLORS`; the init-cycle error path drops the reference
+ * while it is still owned. */
 PG_CONTEXT_PTR(PyObject *, _COLORDICT)
 #define _COLORDICT PG_CONTEXT_VAR(_COLORDICT)
 #else
@@ -2574,6 +2575,17 @@ MODINIT_DEFINE(color)
         Py_XDECREF(apiobj);
         goto error;
     }
+
+#ifdef PG_PER_INTERPRETER_STATE
+    /* The module dict has held a reference of its own since
+     * PyModule_AddObjectRef above, so the one PyObject_GetAttrString returned
+     * can go and the name becomes borrowed. Nothing else ever released it,
+     * which costs nothing for a single process-wide copy but strands the
+     * colour dict -- and every colour object in it -- per interpreter that
+     * runs this init cycle. The drop is last on the success path so that
+     * every error exit above still owns what it releases. */
+    Py_DECREF(_COLORDICT);
+#endif
     return module;
 
 error:

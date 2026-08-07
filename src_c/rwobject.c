@@ -53,8 +53,8 @@ static const char pg_default_errors[] = "backslashreplace";
 
 #ifdef PG_PER_INTERPRETER_STATE
 /* Reference taken by PyImport_ImportModule at the end of the init cycle and
- * held for the module's lifetime; nothing on the live path releases it, so it
- * is reclaimed when the interpreter that imported it is finalized. */
+ * dropped again there: sys.modules owns os for as long as the interpreter
+ * that imported it exists, so the value kept here is borrowed from it. */
 PG_CONTEXT_PTR(PyObject *, os_module)
 #define os_module PG_CONTEXT_VAR(os_module)
 #else
@@ -975,6 +975,15 @@ MODINIT_DEFINE(rwobject)
     if (os_module == NULL) {
         PyErr_Clear();
     }
+
+#ifdef PG_PER_INTERPRETER_STATE
+    /* sys.modules holds os for as long as this interpreter runs, and nothing
+     * here uses it after that, so the name can borrow that reference.
+     * Keeping a second one costs nothing for a single process-wide copy but
+     * strands the os module -- and everything its dict reaches -- per
+     * interpreter that runs this init cycle. */
+    Py_XDECREF(os_module);
+#endif
 
     return module;
 }
