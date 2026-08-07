@@ -290,13 +290,30 @@ pg_init(PyObject *self, PyObject *_null)
 void
 pg_atexit_quit(void)
 {
-    /* Maybe it is safe to call SDL_quit more than once after an SDL_Init,
-       but this is undocumented. So play it safe and only call after a
-       successful SDL_Init.
-    */
+    /* Give back exactly the subsystem reference pg_init() took, and never
+       call SDL_Quit().
+
+       SDL_Quit() is not a reference-count operation. It sets a flag that
+       makes every subsystem shut down whether or not anyone else still holds
+       a reference, and then zeroes the reference-count array outright. In a
+       process where several interpreters have each run this module's init
+       cycle, one of them finishing its work would therefore tear down the
+       video, event and timer state its siblings are still using, and leave
+       the counts claiming nothing was ever initialised -- from which there is
+       no recovery, because a surviving interpreter has no way to notice.
+       SDL_QuitSubSystem() decrements instead, and really quits a subsystem
+       only when the last reference to it goes.
+
+       The rest of what SDL_Quit() does -- clearing hints, the assertion
+       report, and tearing down SDL's logging, tick counter and thread-local
+       storage -- is given up deliberately. Those are process-wide, and the
+       process outlives every one of these init cycles.
+
+       SDL_INIT_NOPARACHUTE is not a subsystem and holds no reference, so the
+       timer reference is the whole of what pg_init() has to give back. */
     if (pg_sdl_was_init) {
         pg_sdl_was_init = false;
-        SDL_Quit();
+        SDL_QuitSubSystem(PG_INIT_TIMER);
     }
 }
 
