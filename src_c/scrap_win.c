@@ -189,9 +189,13 @@ pygame_scrap_init(void)
     }
 #endif
 
+#ifndef PG_PER_INTERPRETER_STATE
+    /* Where the flag is a field of the module state, _scrap_init raises it
+     * against its own module when this returns success -- see scrap_sdl2.c. */
     if (retval) {
         _scrapinitialized = 1;
     }
+#endif
 
     _format_MIME_PLAIN = RegisterClipboardFormat(PYGAME_SCRAP_TEXT);
     return retval;
@@ -275,7 +279,8 @@ pygame_scrap_get(char *type, size_t *count)
     }
 
     if (!pygame_scrap_lost()) {
-        return PyBytes_AsString(PyDict_GetItemString(_clipdata, type));
+        return PyBytes_AsString(
+            PyDict_GetItemString(SCRAP_CLIPDATA(SCRAP_MODULE), type));
     }
 
     if (!OpenClipboard(window_handle)) {

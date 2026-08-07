@@ -35,17 +35,20 @@
  * interpreter is finalized every later read of the shared static dereferences
  * an object that no longer exists.
  *
- * PG_CONTEXT_PTR(type, name) declares the storage for one such pointer,
- * PG_CONTEXT_INT(name) for a flag that gates per-interpreter state, and
- * PG_CONTEXT_VAR(name) reads and writes either, so call sites keep spelling
- * the name exactly as upstream does. Each declaration is paired with an #else
+ * PG_CONTEXT_PTR(type, name) declares the storage for one such pointer and
+ * PG_CONTEXT_VAR(name) reads and writes it, so call sites keep spelling the
+ * name exactly as upstream does. Each declaration is paired with an #else
  * branch that keeps the upstream static verbatim, so a build without the
  * define is byte-for-byte the upstream one.
  *
- * A flag is worth converting only when what it gates is per-interpreter. One
- * that guards process-wide setup must stay process-wide, or that setup is
- * repeated; one that guards per-interpreter state must not, or every
- * interpreter after the first skips its own setup and is left with none.
+ * This is the right tool only for a pointer some *other* owner keeps alive --
+ * a module attribute, sys.modules, an exception the module dict holds. When
+ * the module itself is the owner, real module state (a PyModuleDef with
+ * m_size, plus m_traverse/m_clear/m_free) is strictly better and should be
+ * preferred: it is per-interpreter for the same reason, it releases what it
+ * holds while the interpreter is still alive, it carries flags and scalars
+ * alongside the pointers they gate, and nothing in Python can reach it.
+ * scrap.c is the worked example.
  *
  * Ownership is NOT moved into the slot. The slot stores the pointer; whoever
  * owned the reference upstream still owns it and still drops it in the same
@@ -98,12 +101,12 @@ translation units, which an accessor macro cannot provide."
  */
 #include "pgcontext_host.h"
 
-#define PG_CONTEXT_STORAGE(type, name, empty)                        \
+#define PG_CONTEXT_PTR(type, name)                                   \
     static void *pg_context_create_##name(void)                      \
     {                                                                \
         type *slot = (type *)malloc(sizeof(type));                   \
         if (slot) {                                                  \
-            *slot = empty;                                           \
+            *slot = NULL;                                            \
         }                                                            \
         return slot;                                                 \
     }                                                                \
@@ -121,9 +124,6 @@ translation units, which an accessor macro cannot provide."
             "pygame_" #name, __FILE_NAME__, __LINE__,                \
             pg_context_create_##name, pg_context_free_##name, NULL); \
     }
-
-#define PG_CONTEXT_PTR(type, name) PG_CONTEXT_STORAGE(type, name, NULL)
-#define PG_CONTEXT_INT(name) PG_CONTEXT_STORAGE(int, name, 0)
 
 #define PG_CONTEXT_VAR(name) (*pg_context_slot_##name())
 

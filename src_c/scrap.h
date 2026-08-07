@@ -52,10 +52,31 @@ typedef enum {
 } ScrapClipType;
 
 /**
+ * \brief Whether the scrap module `mod` is initialized.
+ *
+ * The module argument is what makes the answer come from the same place as
+ * everything the flag gates. Where the module carries its own state, the flag
+ * and the two clipboard dicts are fields of one struct, and an entry point
+ * that read the flag off some *other* scrap module object -- an interpreter
+ * can hold more than one, an old one and the one currently in sys.modules --
+ * could pass its own check and then dereference its own null dicts. Where the
+ * state is process-wide there is only one answer, the argument is ignored and
+ * this is the plain function call.
+ *
+ * Callers with no module of their own (the backends) use
+ * pygame_scrap_initialized() and get the interpreter's current one.
+ */
+#ifdef PG_PER_INTERPRETER_STATE
+#define PYGAME_SCRAP_INITIALIZED(mod) SCRAP_INITIALIZED(mod)
+#else
+#define PYGAME_SCRAP_INITIALIZED(mod) pygame_scrap_initialized()
+#endif
+
+/**
  * Macro for initialization checks.
  */
-#define PYGAME_SCRAP_INIT_CHECK()                                             \
-    if (!pygame_scrap_initialized())                                          \
+#define PYGAME_SCRAP_INIT_CHECK(mod)                                          \
+    if (!PYGAME_SCRAP_INITIALIZED(mod))                                       \
     return (PyErr_SetString(pgExc_SDLError, "scrap system not initialized."), \
             NULL)
 

@@ -89,8 +89,15 @@ pygame_scrap_init(void)
     pygame_scrap_types[1] = pygame_scrap_utf8text_type;
     pygame_scrap_types[2] = NULL;
 
+#ifdef PG_PER_INTERPRETER_STATE
+    /* The flag is a field of the module state, and this function has no module
+     * to reach it through. _scrap_init, its only caller, raises it against the
+     * module it just gave the dicts to when this returns success. */
+    return 1;
+#else
     _scrapinitialized = 1;
     return _scrapinitialized;
+#endif
 }
 
 int
