@@ -27,6 +27,22 @@ import os
 import sys
 import platform
 
+# An embedding host may need to install support for this package before it
+# can be used safely. Such a host advertises itself by setting the marker
+# below while the interpreter starts, long before any application code
+# imports pygame; if the marker is missing on a platform where a host is
+# expected, that support did not load.
+#
+# The check tests only for the marker's PRESENCE, and it is deliberately the
+# first thing this module does. A "has the host finished setting up?" test
+# could not be satisfied here, because a host may still be completing its
+# setup when this module is first imported.
+if sys.platform == "ios" and not getattr(sys, "_pygame_host_bridge_registered", False):
+    raise ImportError(
+        "pygame needs runtime support from this app, and it failed to load. "
+        "Restart the app; if this keeps happening, please report it."
+    )
+
 # Choose Windows display driver
 if os.name == "nt":
     pygame_dir = os.path.split(__file__)[0]
