@@ -694,6 +694,12 @@ pg_event_filter(void *_, SDL_Event *event)
 
     else if (event->type == SDL_MOUSEBUTTONDOWN ||
              event->type == SDL_MOUSEBUTTONUP) {
+        /* The two arrays are shared with every other reader and writer of the
+         * input state, exactly as the key arrays above are, so they are
+         * written under the same mutex. The rest of this branch only rewrites
+         * the caller's own copy of the event and needs no lock, so the region
+         * stays as short as the ones above it. */
+        PG_LOCK_EVFILTER_MUTEX
         if (event->type == SDL_MOUSEBUTTONDOWN &&
             event->button.button - 1 < 5) {
             pressed_mouse_buttons[event->button.button - 1] = 1;
@@ -702,6 +708,8 @@ pg_event_filter(void *_, SDL_Event *event)
                  event->button.button - 1 < 5) {
             released_mouse_buttons[event->button.button - 1] = 1;
         }
+        PG_UNLOCK_EVFILTER_MUTEX
+
         if (event->button.button & PGM_BUTTON_KEEP) {
             event->button.button ^= PGM_BUTTON_KEEP;
         }
