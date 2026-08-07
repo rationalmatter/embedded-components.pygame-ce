@@ -39,6 +39,11 @@ typedef struct {
     PyObject *seek;
     PyObject *tell;
     PyObject *close;
+    /* The thread state that was current when this wrapper was built, and the
+     * thread it belongs to. The callbacks reattach it when they are reached
+     * with no thread state current -- see _pg_rw_enter. */
+    PyThreadState *owner_ts;
+    unsigned long owner_thread;
 } pgRWHelper;
 
 /*static const char pg_default_encoding[] = "unicode_escape";*/
@@ -328,6 +333,71 @@ pgRWops_IsFileObject(SDL_RWops *rw)
 #endif
 }
 
+/* Paired state for _pg_rw_enter / _pg_rw_leave. */
+typedef struct {
+    pgGILState gilstate;
+    int restored;
+} pgRWCallbackState;
+
+/* The callbacks below are reached three ways.
+ *
+ * (1) Synchronously from an SDL routine the caller entered after releasing
+ *     the GIL: SDL_LoadBMP_RW / SDL_SaveBMP_RW inside image.c's
+ *     Py_BEGIN_ALLOW_THREADS blocks, TTF_OpenFontRW inside font.c's, and the
+ *     FreeType stream reads FT_Open_Face drives from ft_wrap.c's. No thread
+ *     state is current, but the caller's is parked in that block on this very
+ *     thread, and it belongs to the interpreter that owns the bound methods
+ *     held here. Reattaching it is the exact inverse of the caller's detach
+ *     and keeps the calls below on the owning interpreter. PyGILState_Ensure
+ *     cannot do that: with no thread state current it attaches the first
+ *     interpreter created in the process, which in a runtime that runs
+ *     several of them is somebody else's, so the file object's methods would
+ *     be called with the wrong interpreter attached.
+ *
+ * (2) Directly from pygame with the GIL held -- the error path of
+ *     pgRWops_FromFileObject, or a font object being deallocated. A thread
+ *     state is already current and neither path below does anything, which is
+ *     also what makes a nested callback safe: the outer one has restored the
+ *     thread state, so the inner one sees it as current and cannot restore it
+ *     twice.
+ *
+ * (3) From a thread that never had a thread state at all. No stream pygame
+ *     builds here is handed to an SDL routine that drives it from a thread of
+ *     its own -- every consumer above is synchronous -- but the gilstate path
+ *     remains the fallback for it, and for a wrapper built while no thread
+ *     state was current, so behaviour there is unchanged.
+ *
+ * The thread identity is checked, not assumed: a stream can outlive the call
+ * that created it (a font keeps its stream for as long as the font object
+ * lives) and be read from another thread later, and a thread state may only
+ * ever be attached on the thread it belongs to. */
+static pgRWCallbackState
+_pg_rw_enter(pgRWHelper *helper)
+{
+    pgRWCallbackState state = {{PyGILState_UNLOCKED, 0}, 0};
+
+    if (PyThreadState_GetUnchecked() == NULL && helper->owner_ts != NULL &&
+        helper->owner_thread == PyThread_get_thread_ident()) {
+        PyEval_RestoreThread(helper->owner_ts);
+        state.restored = 1;
+        return state;
+    }
+
+    state.gilstate = pg_gil_ensure();
+    return state;
+}
+
+static void
+_pg_rw_leave(pgRWCallbackState state)
+{
+    if (state.restored) {
+        /* Park it again for the Py_END_ALLOW_THREADS still to come. */
+        PyEval_SaveThread();
+        return;
+    }
+    pg_gil_release(state.gilstate);
+}
+
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 static Sint64
 _pg_rw_size(void *userdata)
@@ -349,7 +419,7 @@ _pg_rw_size(SDL_RWops *context)
         return retval;
     }
 
-    pgGILState state = pg_gil_ensure();
+    pgRWCallbackState state = _pg_rw_enter(helper);
 
     /* Current file position; need to restore it later.
      */
@@ -400,7 +470,7 @@ end:
      */
     Py_XDECREF(pos);
     Py_XDECREF(tmp);
-    pg_gil_release(state);
+    _pg_rw_leave(state);
     return retval;
 }
 
@@ -424,7 +494,7 @@ _pg_rw_write(SDL_RWops *context, const void *ptr, size_t size, size_t num)
         return -1;
     }
 
-    pgGILState state = pg_gil_ensure();
+    pgRWCallbackState state = _pg_rw_enter(helper);
 
     result = PyObject_CallFunction(helper->write, "y#", (const char *)ptr,
                                    (Py_ssize_t)size * num);
@@ -442,7 +512,7 @@ _pg_rw_write(SDL_RWops *context, const void *ptr, size_t size, size_t num)
 #endif
 
 end:
-    pg_gil_release(state);
+    _pg_rw_leave(state);
     return retval;
 }
 
@@ -460,7 +530,7 @@ _pg_rw_close(SDL_RWops *context)
     int retval = 0;
 #endif
     PyObject *result;
-    pgGILState state = pg_gil_ensure();
+    pgRWCallbackState state = _pg_rw_enter(helper);
 
     if (helper->close) {
         result = PyObject_CallNoArgs(helper->close);
@@ -482,7 +552,7 @@ _pg_rw_close(SDL_RWops *context)
     Py_XDECREF(helper->close);
 
     PyMem_Free(helper);
-    pg_gil_release(state);
+    _pg_rw_leave(state);
 #if !SDL_VERSION_ATLEAST(3, 0, 0)
     SDL_FreeRW(context);
 #endif
@@ -507,6 +577,13 @@ pgRWops_FromFileObject(PyObject *obj)
         PyMem_Free(helper);
         return NULL;
     }
+
+    /* Recorded with the GIL held, so this is the thread state of the
+     * interpreter the methods above belong to. A stream is never handed to a
+     * different interpreter, so a callback that finds no thread state current
+     * on this same thread can restore this one. */
+    helper->owner_ts = PyThreadState_GetUnchecked();
+    helper->owner_thread = PyThread_get_thread_ident();
 
 #if SDL_VERSION_ATLEAST(3, 0, 0)
     SDL_IOStreamInterface iface;
@@ -578,7 +655,7 @@ _pg_rw_seek(SDL_RWops *context, Sint64 offset, int whence)
         return -1;
     }
 
-    pgGILState state = pg_gil_ensure();
+    pgRWCallbackState state = _pg_rw_enter(helper);
 
     if (!(offset == 0 &&
           whence == SEEK_CUR)) /* being seek'd, not just tell'd */
@@ -608,7 +685,7 @@ _pg_rw_seek(SDL_RWops *context, Sint64 offset, int whence)
     Py_DECREF(result);
 
 end:
-    pg_gil_release(state);
+    _pg_rw_leave(state);
 
     return retval;
 }
@@ -632,7 +709,7 @@ _pg_rw_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
         return -1;
     }
 
-    pgGILState state = pg_gil_ensure();
+    pgRWCallbackState state = _pg_rw_enter(helper);
     result = PyObject_CallFunction(helper->read, "K",
                                    (unsigned long long)size * maxnum);
     if (!result) {
@@ -659,7 +736,7 @@ _pg_rw_read(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
     Py_DECREF(result);
 
 end:
-    pg_gil_release(state);
+    _pg_rw_leave(state);
 
     return retval;
 }
