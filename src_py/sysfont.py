@@ -48,6 +48,12 @@ def _addfont(name, bold, italic, font, fontdict):
     fontdict[name][bold, italic] = font
 
 
+def _default_font_path():
+    """path of the font that ships with pygame"""
+    pygame_folder = os.path.dirname(os.path.abspath(pygame_main_file))
+    return os.path.join(pygame_folder, "freesansbold.ttf")
+
+
 def initsysfonts_win32():
     """initialize fonts dictionary on Windows"""
     import winreg as _winreg
@@ -194,6 +200,26 @@ def initsysfonts_darwin():
     else:
         # eventually this should probably be the preferred solution
         fonts = _font_finder_darwin()
+
+    return fonts
+
+
+# read the fonts on iOS
+def initsysfonts_ios():
+    """Report the font bundled with pygame as the only system font.
+
+    iOS ships no fontconfig, and there is no way to shell out to one either
+    because the platform has no fork-exec, so the fc-list query used on other
+    unix-likes cannot run. Fall back to freesansbold.ttf, which ships with
+    pygame and is the same face Font(None, size) uses. Registering it as
+    freesans lets create_aliases() resolve the generic sans names onto it, so
+    a SysFont() call asking for a common sans font gets a real font back
+    instead of a warning.
+    """
+    fonts = {}
+    font_path = _default_font_path()
+    if exists(font_path):
+        _addfont("freesans", True, False, font_path, fonts)
 
     return fonts
 
@@ -355,13 +381,13 @@ def initsysfonts():
         fonts = initsysfonts_win32()
     elif sys.platform == "darwin":
         fonts = initsysfonts_darwin()
+    elif sys.platform == "ios":
+        fonts = initsysfonts_ios()
     else:
         fonts = initsysfonts_unix()
 
     # Try to add the default font to sys fonts
-    pygame_folder = os.path.dirname(os.path.abspath(pygame_main_file))
-    default_font_path = os.path.join(pygame_folder, "freesansbold.ttf")
-    _addfont("freesansbold", True, False, default_font_path, fonts)
+    _addfont("freesansbold", True, False, _default_font_path(), fonts)
 
     Sysfonts.update(fonts)
     create_aliases()
