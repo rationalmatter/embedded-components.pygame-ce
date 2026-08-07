@@ -796,6 +796,15 @@ pg_get_surface(PyObject *self, PyObject *_null)
     else {
         SDL_Surface *sdl_surface = SDL_GetWindowSurface(win);
         pgSurfaceObject *old_surface = pg_GetDefaultWindowSurface();
+        if (!old_surface) {
+            /* A default window with no display surface to go with it.
+             * Upstream the two are a pair, so this cannot happen there; it
+             * can once the surface is stored per interpreter and the window
+             * is not, because the window outlives the interpreter that made
+             * it. "No mode set" is the honest answer for a caller that has
+             * no display surface of its own. */
+            Py_RETURN_NONE;
+        }
         if (sdl_surface != old_surface->surf) {
             pgSurfaceObject *new_surface =
                 (pgSurfaceObject *)pgSurface_New2(sdl_surface, SDL_FALSE);
@@ -952,8 +961,16 @@ pg_ResizeEventWatch(void *userdata, SDL_Event *event)
             int w = event->window.data1;
             int h = event->window.data2;
             pgSurfaceObject *display_surface = pg_GetDefaultWindowSurface();
-            SDL_Surface *surf =
-                PG_CreateSurface(w, h, SDL_PIXELFORMAT_XRGB8888);
+            SDL_Surface *surf;
+
+            /* The watch runs for whatever interpreter SDL delivers the event
+             * to, and that one need not hold the display surface -- the
+             * window is process-wide, the surface is not. Nothing to
+             * re-point if it is absent. */
+            if (!display_surface) {
+                return 0;
+            }
+            surf = PG_CreateSurface(w, h, SDL_PIXELFORMAT_XRGB8888);
 
             SDL_FreeSurface(display_surface->surf);
             display_surface->surf = surf;
@@ -1025,7 +1042,9 @@ pg_ResizeEventWatch(void *userdata, SDL_Event *event)
 #endif
         SDL_Surface *sdl_surface = SDL_GetWindowSurface(window);
         pgSurfaceObject *old_surface = pg_GetDefaultWindowSurface();
-        if (sdl_surface != old_surface->surf) {
+        /* Same as above: the interpreter this watch runs in may hold no
+         * display surface for the process-wide window the event is about. */
+        if (old_surface && sdl_surface != old_surface->surf) {
             old_surface->surf = sdl_surface;
         }
     }
@@ -2186,6 +2205,15 @@ pg_flip_internal(_DisplayState *state)
     }
 
     if (!win) {
+        PyErr_SetString(pgExc_SDLError, "Display mode not set");
+        return -1;
+    }
+    /* Both halves of the default display are needed below, and the window
+     * being present no longer implies the surface is: the window is a
+     * process-wide SDL resource while the surface is a Python object held by
+     * the interpreter that created it. Report the missing half the same way
+     * as a missing window instead of dereferencing it. */
+    if (!state->using_gl && !pg_GetDefaultWindowSurface()) {
         PyErr_SetString(pgExc_SDLError, "Display mode not set");
         return -1;
     }
