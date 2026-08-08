@@ -449,6 +449,10 @@ pg_get_init(PyObject *self, PyObject *_null)
 static PyObject *
 pg_get_active(PyObject *self, PyObject *_null)
 {
+    /* A session that ended without its quit leaves the recorded default
+     * window stale; forget it before reading it. No-op while video is up. */
+    _display_session_forget();
+
     SDL_Window *win = pg_GetDefaultWindow();
     if (!win) {
         Py_RETURN_FALSE;
@@ -2148,6 +2152,10 @@ _pg_get_default_display_masks(int bpp, Uint32 *Rmask, Uint32 *Gmask,
 static PyObject *
 pg_window_size(PyObject *self, PyObject *_null)
 {
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+
     SDL_Window *win = pg_GetDefaultWindow();
     int w, h;
     if (!win) {
@@ -2160,6 +2168,10 @@ pg_window_size(PyObject *self, PyObject *_null)
 static PyObject *
 pg_get_window_position(PyObject *self, PyObject *_null)
 {
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+
     SDL_Window *win = pg_GetDefaultWindow();
     int x, y = 0;
     if (!win) {
@@ -2172,6 +2184,10 @@ pg_get_window_position(PyObject *self, PyObject *_null)
 static PyObject *
 pg_set_window_position(PyObject *self, PyObject *arg)
 {
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+
     SDL_Window *win = pg_GetDefaultWindow();
     PyObject *pos = NULL;
     int x, y = 0;
@@ -2738,8 +2754,13 @@ pg_set_gamma(PyObject *self, PyObject *arg)
     float r, g, b;
     int result = 0;
     _DisplayState *state = DISPLAY_MOD_STATE(self);
-    SDL_Window *win = pg_GetDefaultWindow();
+    SDL_Window *win;
     Uint16 *gamma_ramp;
+
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+    win = pg_GetDefaultWindow();
 
     if (!PyArg_ParseTuple(arg, "f|ff", &r, &g, &b)) {
         return NULL;
@@ -2832,9 +2853,15 @@ pg_set_gamma_ramp(PyObject *self, PyObject *arg)
     }
 
     _DisplayState *state = DISPLAY_MOD_STATE(self);
-    SDL_Window *win = pg_GetDefaultWindow();
-    Uint16 *gamma_ramp = (Uint16 *)malloc((3 * 256) * sizeof(Uint16));
+    SDL_Window *win;
+    Uint16 *gamma_ramp;
     Uint16 *r, *g, *b;
+
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+    win = pg_GetDefaultWindow();
+    gamma_ramp = (Uint16 *)malloc((3 * 256) * sizeof(Uint16));
     int result = 0;
     if (!gamma_ramp) {
         return PyErr_NoMemory();
@@ -2870,6 +2897,10 @@ pg_set_gamma_ramp(PyObject *self, PyObject *arg)
 static PyObject *
 pg_set_caption(PyObject *self, PyObject *arg)
 {
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+
     _DisplayState *state = DISPLAY_MOD_STATE(self);
     SDL_Window *win = pg_GetDefaultWindow();
     char *title, *icontitle = NULL;
@@ -2904,6 +2935,10 @@ pg_set_caption(PyObject *self, PyObject *arg)
 static PyObject *
 pg_get_caption(PyObject *self, PyObject *_null)
 {
+    /* Same boundary check as get_active: forget a dead session's window
+     * before reading it. */
+    _display_session_forget();
+
     _DisplayState *state = DISPLAY_MOD_STATE(self);
     SDL_Window *win = pg_GetDefaultWindow();
     const char *title = win ? SDL_GetWindowTitle(win) : state->title;
